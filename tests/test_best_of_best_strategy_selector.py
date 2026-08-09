@@ -32,7 +32,7 @@ def result(name, direction, score):
     )
 
 
-def test_scores_below_80_are_rejected():
+def test_scores_below_80_are_rejected_even_with_alignment():
     selector = StrategySelector((Candidate("SUPPORT_RESISTANCE", result("SUPPORT_RESISTANCE", "BUY", 79)),))
     assert selector.evaluate(context()).selected is None
 
@@ -42,6 +42,7 @@ def test_best_candidate_at_80_is_selected():
     selection = selector.evaluate(context())
     assert selection.selected is not None
     assert selection.selected.strategy == "BREAKOUT_RETEST"
+    assert selection.selected.score == 85
 
 
 def test_close_opposing_candidates_are_rejected():
@@ -54,9 +55,9 @@ def test_close_opposing_candidates_are_rejected():
     assert selector.evaluate(context()).selected is None
 
 
-def test_higher_timeframe_alignment_can_promote_a_strong_candidate():
-    selector = StrategySelector((Candidate("TREND_PULLBACK", result("TREND_PULLBACK", "BUY", 78)),))
+def test_higher_timeframe_alignment_ranks_a_qualified_candidate():
+    selector = StrategySelector((Candidate("TREND_PULLBACK", result("TREND_PULLBACK", "BUY", 80)),))
     selection = selector.evaluate(context("TREND_UP", "TREND_UP"))
     assert selection.selected is not None
     assert selection.selected.strategy == "TREND_PULLBACK"
-    assert selection.selected.score == 83
+    assert selection.selected.score == 85
