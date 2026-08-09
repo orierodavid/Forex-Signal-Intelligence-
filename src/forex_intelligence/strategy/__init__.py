@@ -1,6 +1,7 @@
 """Modular strategy framework for regime-aware setup detection."""
 
 from .base import Strategy, StrategyContext, StrategyResult
+from .evidence_selector import EvidenceAwareStrategySelector, EvidenceSelection
 from .selector import StrategySelector
 from .strategies import (
     BreakoutRetestStrategy,
@@ -17,6 +18,8 @@ __all__ = [
     "StrategyContext",
     "StrategyResult",
     "StrategySelector",
+    "EvidenceAwareStrategySelector",
+    "EvidenceSelection",
     "TrendPullbackStrategy",
     "BreakoutRetestStrategy",
     "LiquiditySweepReversalStrategy",
