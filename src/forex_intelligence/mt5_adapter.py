@@ -30,7 +30,7 @@ class MT5Adapter:
             return self.mt5
         try:
             import MetaTrader5 as mt5
-        except ImportError as exc:  # pragma: no cover - exercised by deployment, not CI
+        except ImportError as exc:
             raise MT5UnavailableError("MetaTrader5 package is not installed") from exc
         self.mt5 = mt5
         return mt5
@@ -54,27 +54,17 @@ class MT5Adapter:
         trade_mode = getattr(info, "trade_mode", None)
         demo_value = getattr(mt5, "ACCOUNT_TRADE_MODE_DEMO", 0)
         live_value = getattr(mt5, "ACCOUNT_TRADE_MODE_REAL", 2)
-        account_type = (
-            AccountType.DEMO if trade_mode == demo_value
-            else AccountType.LIVE if trade_mode == live_value
-            else AccountType.UNKNOWN
-        )
-        return AccountInfo(
-            login=int(getattr(info, "login", 0)),
-            server=str(getattr(info, "server", "")),
-            account_type=account_type,
-            balance=float(getattr(info, "balance", 0.0)),
-            equity=float(getattr(info, "equity", 0.0)),
-        )
+        account_type = AccountType.DEMO if trade_mode == demo_value else AccountType.LIVE if trade_mode == live_value else AccountType.UNKNOWN
+        return AccountInfo(int(getattr(info, "login", 0)), str(getattr(info, "server", "")), account_type,
+                           float(getattr(info, "balance", 0.0)), float(getattr(info, "equity", 0.0)))
 
     def symbol_info(self, symbol: str) -> Any:
         mt5 = self._module()
         info = mt5.symbol_info(symbol)
         if info is None:
             raise MT5UnavailableError(f"symbol_info failed for {symbol}: {mt5.last_error()}")
-        if not getattr(info, "visible", True):
-            if not mt5.symbol_select(symbol, True):
-                raise MT5UnavailableError(f"symbol_select failed for {symbol}: {mt5.last_error()}")
+        if not getattr(info, "visible", True) and not mt5.symbol_select(symbol, True):
+            raise MT5UnavailableError(f"symbol_select failed for {symbol}: {mt5.last_error()}")
         return info
 
     def tick(self, symbol: str) -> Any:
@@ -83,6 +73,13 @@ class MT5Adapter:
         if tick is None:
             raise MT5UnavailableError(f"symbol_info_tick failed for {symbol}: {mt5.last_error()}")
         return tick
+
+    def positions(self, symbol: str | None = None) -> tuple[Any, ...]:
+        mt5 = self._module()
+        rows = mt5.positions_get(symbol=symbol) if symbol else mt5.positions_get()
+        if rows is None:
+            raise MT5UnavailableError(f"positions_get failed: {mt5.last_error()}")
+        return tuple(rows)
 
     def submit(self, request: ExecutionRequest) -> ExecutionResult:
         mt5 = self._module()
@@ -106,14 +103,7 @@ class MT5Adapter:
         result = mt5.order_send(trade_request)
         if result is None:
             return ExecutionResult(False, f"order_send returned no result: {mt5.last_error()}")
-        retcode = getattr(result, "retcode", None)
-        success = retcode == getattr(mt5, "TRADE_RETCODE_DONE", None)
-        if not success:
-            return ExecutionResult(False, f"broker rejected order: retcode={retcode}")
-        return ExecutionResult(
-            accepted=True,
-            reason="broker accepted order",
-            order_id=getattr(result, "order", None),
-            position_id=getattr(result, "position", None),
-            fill_price=getattr(result, "price", None),
-        )
+        if getattr(result, "retcode", None) != getattr(mt5, "TRADE_RETCODE_DONE", None):
+            return ExecutionResult(False, f"broker rejected order: retcode={getattr(result, 'retcode', None)}")
+        return ExecutionResult(True, "broker accepted order", getattr(result, "order", None),
+                               getattr(result, "position", None), getattr(result, "price", None))
