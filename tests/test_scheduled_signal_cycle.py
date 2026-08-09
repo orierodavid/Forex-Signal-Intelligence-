@@ -1,4 +1,4 @@
-from scripts.run_scheduled_signal_cycle import deliver_qualified_signal
+from forex_intelligence.scheduled import deliver_qualified_signal
 from forex_intelligence.telegram import TelegramNotifier
 
 
