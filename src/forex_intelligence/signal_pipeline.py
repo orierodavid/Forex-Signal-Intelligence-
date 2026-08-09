@@ -1,16 +1,16 @@
 from __future__ import annotations
 
-from datetime import datetime, timedelta, timezone
-from typing import Callable, Mapping, Protocol
+from datetime import datetime, timezone
+from typing import Mapping, Protocol
 from uuid import uuid4
 
 from forex_intelligence.anticipation import AnticipationEngine, AnticipationState
-from forex_intelligence.domain import Evidence, MarketRegime, Signal, SignalStatus, Timeframe
+from forex_intelligence.domain import Direction, Evidence, MarketRegime, Signal, SignalStatus, Timeframe
 from forex_intelligence.market_data import MarketSnapshot, MT5MarketDataProvider
 from forex_intelligence.regime import RegimeEngine
 from forex_intelligence.risk import PositionSize, RiskEngine, SymbolSpec
 from forex_intelligence.strategy import StrategyContext, StrategySelector
-from forex_intelligence.telegram import TelegramNotifier
+from forex_intelligence.telegram import TelegramNotifier, signal_from_mapping
 
 
 class SnapshotProvider(Protocol):
@@ -56,7 +56,6 @@ class SignalPipeline:
             for timeframe in (Timeframe.H4, Timeframe.H1, Timeframe.M15)
         }
         assessments = {tf: self.regime_engine.assess(snapshot) for tf, snapshot in snapshots.items()}
-
         if any(assessment.regime == MarketRegime.UNTRADEABLE for assessment in assessments.values()):
             return None, None
 
@@ -64,6 +63,7 @@ class SignalPipeline:
         h1 = assessments[Timeframe.H1]
         if not m15.available or not m15.bars:
             return None, None
+
         current_price = m15.bars[-1].close
         context = StrategyContext(
             pair=pair,
@@ -102,10 +102,12 @@ class SignalPipeline:
             stop_loss = min(bar.low for bar in recent)
             stop_distance = current_price - stop_loss
             take_profit = current_price + stop_distance * 2.0
+            direction = Direction.BUY
         else:
             stop_loss = max(bar.high for bar in recent)
             stop_distance = stop_loss - current_price
             take_profit = current_price - stop_distance * 2.0
+            direction = Direction.SELL
         if stop_distance <= 0:
             return None, None
 
@@ -118,7 +120,7 @@ class SignalPipeline:
         signal = Signal(
             signal_id=uuid4(),
             pair=pair,
-            direction=setup.direction,  # type: ignore[arg-type]
+            direction=direction,
             strategy=setup.strategy,
             market_regime=h1.regime,
             current_price=current_price,
@@ -140,24 +142,27 @@ class SignalPipeline:
 
     def evaluate_and_notify(self, **kwargs: object) -> tuple[Signal | None, PositionSize | None]:
         signal, position = self.evaluate(**kwargs)
-        if signal is not None and self.notifier is not None:
+        if signal is not None and self.notifier is not None and position is not None:
             values: Mapping[str, object] = {
-                **signal.as_dict(),
+                "pair": signal.pair,
+                "direction": signal.direction.value,
                 "status": signal.status.value,
                 "strategy": signal.strategy,
                 "market_regime": signal.market_regime.value,
-                "risk_reward": f"1:{signal.risk_reward:.2f}",
-                "risk": f"0.5% | volume {position.volume:g}" if position else "0.5%",
-                "timeframes": "/".join(tf.value for tf in signal.timeframes),
-                "evidence": "; ".join(e.name for e in signal.evidence),
-                "score": int(round(signal.score)),
-                "confidence": f"{signal.confidence:.0f}%",
                 "entry": f"{signal.entry:.8f}",
                 "stop_loss": f"{signal.stop_loss:.8f}",
                 "take_profit": f"{signal.take_profit:.8f}",
+                "risk_reward": f"1:{signal.risk_reward:.2f}",
+                "risk": f"0.5% | volume {position.volume:g}",
+                "score": int(round(signal.score)),
+                "confidence": f"{signal.confidence:.0f}%",
+                "timeframes": "/".join(tf.value for tf in signal.timeframes),
+                "evidence": "; ".join(e.name for e in signal.evidence),
+                "trigger": signal.trigger,
+                "invalidation": signal.invalidation,
                 "expiry": signal.expiry.isoformat(),
             }
-            self.notifier.send_signal(__import__("forex_intelligence.telegram", fromlist=["signal_from_mapping"]).signal_from_mapping(values))
+            self.notifier.send_signal(signal_from_mapping(values))
         return signal, position
 
 
