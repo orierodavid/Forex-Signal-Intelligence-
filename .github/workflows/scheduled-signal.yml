@@ -10,15 +10,20 @@ permissions:
 
 jobs:
   signal:
-    # The runner must be a Windows machine with the MT5 terminal installed,
-    # logged into the intended Exness account, and registered with the `mt5` label.
-    runs-on: [self-hosted, windows, mt5]
+    # Cloud-only runner: no local Windows machine or MT5 terminal required.
+    runs-on: ubuntu-latest
     timeout-minutes: 10
     env:
       TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
       TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+      TWELVE_DATA_API_KEY: ${{ secrets.TWELVE_DATA_API_KEY }}
       FOREX_SYMBOL: ${{ vars.FOREX_SYMBOL || 'EURUSD' }}
-      MT5_TERMINAL_PATH: ${{ vars.MT5_TERMINAL_PATH || '' }}
+      SIGNAL_EQUITY: ${{ vars.SIGNAL_EQUITY || '1000' }}
+      TICK_SIZE: ${{ vars.TICK_SIZE || '0.00001' }}
+      TICK_VALUE: ${{ vars.TICK_VALUE || '1' }}
+      VOLUME_STEP: ${{ vars.VOLUME_STEP || '0.01' }}
+      MIN_VOLUME: ${{ vars.MIN_VOLUME || '0.01' }}
+      MAX_VOLUME: ${{ vars.MAX_VOLUME || '100' }}
       TRIGGER_CONFIRMED: "false"
     steps:
       - name: Checkout
@@ -30,9 +35,13 @@ jobs:
           python-version: "3.11"
 
       - name: Install project
-        shell: pwsh
-        run: python -m pip install --upgrade pip; python -m pip install ".[mt5]"
+        shell: bash
+        run: python -m pip install --upgrade pip && python -m pip install ".[test]"
+
+      - name: Run tests
+        shell: bash
+        run: python -m pytest
 
       - name: Run scheduled analysis
-        shell: pwsh
+        shell: bash
         run: python scripts/run_scheduled_signal.py
