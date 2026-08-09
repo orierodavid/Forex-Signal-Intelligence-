@@ -1,4 +1,4 @@
-from forex_intelligence.scheduled import deliver_qualified_signal
+from forex_intelligence.scheduled import deliver_qualified_signal, run_cycle
 from forex_intelligence.telegram import TelegramNotifier
 
 
@@ -41,4 +41,18 @@ def test_invalid_direction_is_not_delivered():
     transport = FakeTransport()
     notifier = TelegramNotifier("token", "chat", transport)
     assert deliver_qualified_signal(signal(direction="NO_TRADE"), notifier) is False
+    assert transport.calls == []
+
+
+def test_run_cycle_delivers_producer_output():
+    transport = FakeTransport()
+    notifier = TelegramNotifier("token", "chat", transport)
+    assert run_cycle(lambda: signal(), notifier) is True
+    assert len(transport.calls) == 1
+
+
+def test_run_cycle_does_nothing_when_producer_has_no_signal():
+    transport = FakeTransport()
+    notifier = TelegramNotifier("token", "chat", transport)
+    assert run_cycle(lambda: None, notifier) is False
     assert transport.calls == []
