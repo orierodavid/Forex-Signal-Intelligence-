@@ -1,36 +1,19 @@
-"""Run one scheduled signal cycle and deliver only qualified trade signals to Telegram.
-
-This is deliberately a single-cycle runner. Scheduling is provided by the hosting
-platform; this script never submits broker orders.
-"""
+"""Run one scheduled signal cycle and deliver qualified signals to Telegram."""
 from __future__ import annotations
 
 import os
 import sys
-from typing import Any
-
-from forex_intelligence.telegram import TelegramNotifier, signal_from_mapping
-
-
-def deliver_qualified_signal(signal: dict[str, Any], notifier: TelegramNotifier) -> bool:
-    """Send a validated trade signal to Telegram; return False for non-trade output."""
-    if signal.get("status") not in {"TRIGGERED", "READY"}:
-        return False
-    if signal.get("direction") not in {"BUY", "SELL"}:
-        return False
-    notifier.send_signal(signal_from_mapping(signal))
-    return True
 
 
 def main() -> int:
-    # The actual market/strategy pipeline is injected by the application runtime.
-    # This guard prevents accidental execution if someone runs this scaffold without
-    # wiring a producer. Broker execution is intentionally absent from this runner.
+    # Scheduling is supplied by the hosting platform. The actual signal producer
+    # will call forex_intelligence.scheduled.deliver_qualified_signal. This entry
+    # point intentionally has no broker/MT5 execution capability.
     if os.getenv("SIGNAL_CYCLE_ENABLED", "false").lower() != "true":
         print("Signal cycle disabled; no trade signal delivered.")
         return 0
 
-    print("Signal cycle enabled. Connect the production signal producer before scheduling.")
+    print("Signal cycle enabled; awaiting the configured signal producer.")
     return 0
 
 
