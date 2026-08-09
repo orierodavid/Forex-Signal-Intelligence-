@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from dataclasses import replace
 from datetime import datetime, timezone
 from typing import Mapping, Protocol
 from uuid import uuid4
@@ -70,6 +71,7 @@ class SignalPipeline:
             regime=h1.regime.value,
             bars={tf.value: snapshot.bars for tf, snapshot in snapshots.items()},
             current_price=current_price,
+            regimes={tf.value: assessment.regime.value for tf, assessment in assessments.items()},
         )
         selection = self.strategy_selector.evaluate(context)
         candidate = selection.selected
