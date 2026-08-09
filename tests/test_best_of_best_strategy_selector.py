@@ -54,8 +54,9 @@ def test_close_opposing_candidates_are_rejected():
     assert selector.evaluate(context()).selected is None
 
 
-def test_higher_timeframe_alignment_can_break_a_tie_without_creating_eligibility():
+def test_higher_timeframe_alignment_can_promote_a_strong_candidate():
     selector = StrategySelector((Candidate("TREND_PULLBACK", result("TREND_PULLBACK", "BUY", 78)),))
     selection = selector.evaluate(context("TREND_UP", "TREND_UP"))
-    assert selection.selected is None
-    assert selection.candidates[0].score == 83
+    assert selection.selected is not None
+    assert selection.selected.strategy == "TREND_PULLBACK"
+    assert selection.selected.score == 83
