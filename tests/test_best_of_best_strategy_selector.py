@@ -37,7 +37,7 @@ def test_scores_below_80_are_rejected_even_with_alignment():
     assert selector.evaluate(context()).selected is None
 
 
-def test_best_candidate_at_80_is_selected():
+def test_best_candidate_at_80_is_selected_and_alignment_ranks_it():
     selector = StrategySelector((Candidate("BREAKOUT_RETEST", result("BREAKOUT_RETEST", "BUY", 80)),))
     selection = selector.evaluate(context())
     assert selection.selected is not None
