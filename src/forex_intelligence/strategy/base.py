@@ -6,12 +6,13 @@ from typing import Any, Mapping, Protocol, Sequence
 
 @dataclass(frozen=True)
 class StrategyContext:
-    """Broker-independent inputs supplied to a strategy."""
+    """Broker-independent, multi-timeframe inputs supplied to a strategy."""
 
     pair: str
     regime: str
     bars: Mapping[str, Sequence[Any]]
     current_price: float
+    regimes: Mapping[str, str] = field(default_factory=dict)
 
 
 @dataclass(frozen=True)
