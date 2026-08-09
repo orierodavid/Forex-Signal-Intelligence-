@@ -28,32 +28,42 @@ def test_create_watch_is_watching_outside_entry_zone():
 
 
 def test_create_watch_becomes_ready_inside_entry_zone():
+    now = datetime(2026, 8, 9, tzinfo=timezone.utc)
     setup = AnticipationEngine().create_watch(
         setup_id="s2", candidate=candidate(entry_low=100, entry_high=101),
-        pair="EURUSD", current_price=100.5,
-        now=datetime(2026, 8, 9, tzinfo=timezone.utc),
+        pair="EURUSD", current_price=100.5, now=now,
     )
     assert setup.state is AnticipationState.READY
 
 
 def test_transition_requires_explicit_trigger():
-    setup = AnticipationEngine().create_watch(
+    now = datetime(2026, 8, 9, tzinfo=timezone.utc)
+    engine = AnticipationEngine()
+    setup = engine.create_watch(
         setup_id="s3", candidate=candidate(entry_low=100, entry_high=101),
-        pair="EURUSD", current_price=100.5,
-        now=datetime(2026, 8, 9, tzinfo=timezone.utc),
+        pair="EURUSD", current_price=100.5, now=now,
     )
-    updated = AnticipationEngine().transition(setup, current_price=100.7, trigger_confirmed=False)
+    # Keep the transition timestamp deterministic and before expiry.
+    transition_time = now + timedelta(minutes=30)
+    updated = engine.transition(
+        setup, current_price=100.7, trigger_confirmed=False, now=transition_time,
+    )
     assert updated.state is AnticipationState.READY
-    triggered = AnticipationEngine().transition(setup, current_price=100.7, trigger_confirmed=True)
+    triggered = engine.transition(
+        setup, current_price=100.7, trigger_confirmed=True, now=transition_time,
+    )
     assert triggered.state is AnticipationState.TRIGGERED
 
 
 def test_invalidation_wins_over_trigger():
+    now = datetime(2026, 8, 9, tzinfo=timezone.utc)
     setup = AnticipationEngine().create_watch(
         setup_id="s4", candidate=candidate(entry_low=100, entry_high=101),
-        pair="EURUSD", current_price=100.5,
+        pair="EURUSD", current_price=100.5, now=now,
     )
-    updated = AnticipationEngine().transition(setup, current_price=99, trigger_confirmed=True, invalidated=True)
+    updated = AnticipationEngine().transition(
+        setup, current_price=99, trigger_confirmed=True, invalidated=True, now=now,
+    )
     assert updated.state is AnticipationState.INVALIDATED
 
 
