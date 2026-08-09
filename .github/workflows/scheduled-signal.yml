@@ -1,0 +1,38 @@
+name: Scheduled Forex Signal
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "*/15 * * * *"
+
+permissions:
+  contents: read
+
+jobs:
+  signal:
+    # The runner must be a Windows machine with the MT5 terminal installed,
+    # logged into the intended Exness account, and registered with the `mt5` label.
+    runs-on: [self-hosted, windows, mt5]
+    timeout-minutes: 10
+    env:
+      TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+      TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+      FOREX_SYMBOL: ${{ vars.FOREX_SYMBOL || 'EURUSD' }}
+      MT5_TERMINAL_PATH: ${{ vars.MT5_TERMINAL_PATH || '' }}
+      TRIGGER_CONFIRMED: "false"
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install project
+        shell: pwsh
+        run: python -m pip install --upgrade pip; python -m pip install ".[mt5]"
+
+      - name: Run scheduled analysis
+        shell: pwsh
+        run: python scripts/run_scheduled_signal.py
