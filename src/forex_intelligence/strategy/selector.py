@@ -24,6 +24,10 @@ class StrategySelector:
     Quality is gated on the strategy's own score. Higher-timeframe alignment
     can rank an already-qualified candidate more strongly, but it can never
     manufacture eligibility for a candidate scoring below 80.
+
+    Opposing candidates are treated as ambiguous using their raw strategy
+    scores. Confluence bonuses must not erase genuine disagreement between
+    otherwise competing setups.
     """
 
     def __init__(self, strategies: Iterable[Strategy] = DEFAULT_STRATEGIES, minimum_score: float = 80.0) -> None:
@@ -50,24 +54,29 @@ class StrategySelector:
 
     def evaluate(self, context: StrategyContext) -> StrategySelection:
         raw_candidates = tuple(strategy.evaluate(context) for strategy in self.strategies)
-        # Preserve the raw score as the eligibility gate. Alignment is a
-        # ranking/confluence bonus only and cannot turn 79 into a trade.
         candidates = tuple(
             replace(candidate, score=min(100.0, candidate.score + self._alignment_bonus(candidate, context)))
             for candidate in raw_candidates
         )
-        eligible = [
-            candidate
-            for raw, candidate in zip(raw_candidates, candidates)
+        eligible_pairs = [
+            (raw, ranked)
+            for raw, ranked in zip(raw_candidates, candidates)
             if raw.eligible and raw.score >= self.minimum_score
         ]
-        if not eligible:
+        if not eligible_pairs:
             return StrategySelection(None, candidates, self.minimum_score)
 
-        eligible.sort(key=lambda item: (-item.score, item.strategy))
-        winner = eligible[0]
+        eligible_pairs.sort(key=lambda pair: (-pair[1].score, pair[1].strategy))
+        winner_raw, winner = eligible_pairs[0]
 
-        opposing = [candidate for candidate in eligible[1:] if candidate.direction != winner.direction]
-        if opposing and winner.score - opposing[0].score < 5.0:
+        opposing = [
+            (raw, ranked)
+            for raw, ranked in eligible_pairs[1:]
+            if ranked.direction != winner.direction
+        ]
+        # Use raw strategy scores for ambiguity. H4/H1 bonuses are confluence
+        # evidence for ranking, not evidence that should manufacture a decisive
+        # edge over a genuinely competing opposing setup.
+        if opposing and winner_raw.score - opposing[0][0].score < 5.0:
             return StrategySelection(None, candidates, self.minimum_score)
         return StrategySelection(winner, candidates, self.minimum_score)
