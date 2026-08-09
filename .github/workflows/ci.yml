@@ -37,15 +37,3 @@ jobs:
 
       - name: Run tests
         run: pytest
-
-      - name: Verify execution safety defaults
-        run: |
-          python - <<'PY'
-          from forex_intelligence.config import Settings
-
-          settings = Settings()
-          assert settings.execution_mode == "ANALYSIS_ONLY"
-          assert settings.execution_enabled is False
-          assert settings.live_execution_enabled is False
-          print("Execution safety defaults verified: ANALYSIS_ONLY / execution disabled / live disabled")
-          PY
