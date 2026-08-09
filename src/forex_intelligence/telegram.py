@@ -62,9 +62,17 @@ class TelegramSignal:
 class TelegramNotifier:
     """Final signal output. Never performs broker execution."""
 
-    def __init__(self, token: str | None = None, chat_id: str | None = None, transport: TelegramTransport | None = None) -> None:
-        self.token = token or os.getenv("TELEGRAM_BOT_TOKEN", "")
-        self.chat_id = chat_id or os.getenv("TELEGRAM_CHAT_ID", "")
+    def __init__(
+        self,
+        token: str | None = None,
+        chat_id: str | None = None,
+        transport: TelegramTransport | None = None,
+    ) -> None:
+        # None means "use the environment"; an explicitly supplied empty string
+        # must remain empty so tests and callers can intentionally represent a
+        # missing credential even when CI secrets are present in the environment.
+        self.token = os.getenv("TELEGRAM_BOT_TOKEN", "") if token is None else token
+        self.chat_id = os.getenv("TELEGRAM_CHAT_ID", "") if chat_id is None else chat_id
         self.transport = transport or HttpTelegramTransport()
 
     @property
