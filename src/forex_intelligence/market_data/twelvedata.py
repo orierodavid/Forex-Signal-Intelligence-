@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import json
-import os
 from dataclasses import asdict
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -174,15 +173,11 @@ class TwelveDataMarketDataProvider:
             # uncontrolled retry loop to exceed the daily allowance.
             self._state["calls"] = calls + 1
             self._save_state()
-            if cached is not None:
-                return cached
             return self._unavailable(symbol, timeframe, str(exc))
 
         self._state["calls"] = calls + 1
         if payload.get("status") == "error" or "values" not in payload:
             self._save_state()
-            if cached is not None:
-                return cached
             return self._unavailable(
                 symbol,
                 timeframe,
