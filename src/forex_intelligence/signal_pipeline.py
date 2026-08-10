@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-from dataclasses import replace
 from datetime import datetime, timezone
 from typing import Mapping, Protocol
 from uuid import uuid4
@@ -21,6 +20,8 @@ class SnapshotProvider(Protocol):
 class SignalPipeline:
     """Runs the read-only analysis path and optionally emits a Telegram alert.
 
+    M15 is the primary trading timeframe. H1 and H4 are higher-timeframe
+    confirmation layers used to strengthen or weaken the M15 decision.
     Broker execution is deliberately absent. A caller must explicitly confirm
     the strategy trigger before a TRIGGERED signal can be emitted.
     """
@@ -61,14 +62,16 @@ class SignalPipeline:
             return None, None
 
         m15 = snapshots[Timeframe.M15]
-        h1 = assessments[Timeframe.H1]
+        m15_assessment = assessments[Timeframe.M15]
         if not m15.available or not m15.bars:
             return None, None
 
         current_price = m15.bars[-1].close
         context = StrategyContext(
             pair=pair,
-            regime=h1.regime.value,
+            # M15 is the strategy's primary regime. H1/H4 remain available in
+            # context.regimes for confirmation/confluence scoring.
+            regime=m15_assessment.regime.value,
             bars={tf.value: snapshot.bars for tf, snapshot in snapshots.items()},
             current_price=current_price,
             regimes={tf.value: assessment.regime.value for tf, assessment in assessments.items()},
@@ -124,18 +127,19 @@ class SignalPipeline:
             pair=pair,
             direction=direction,
             strategy=setup.strategy,
-            market_regime=h1.regime,
+            # The signal is an M15 decision strengthened by H1/H4 context.
+            market_regime=m15_assessment.regime,
             current_price=current_price,
             entry=current_price,
             stop_loss=stop_loss,
             take_profit=take_profit,
             risk_reward=2.0,
             score=setup.score,
-            confidence=min(100.0, h1.confidence),
+            confidence=min(100.0, m15_assessment.confidence),
             trigger=setup.trigger,
             invalidation=setup.invalidation,
             expiry=setup.expires_at,
-            timeframes=(Timeframe.H4, Timeframe.H1, Timeframe.M15),
+            timeframes=(Timeframe.M15, Timeframe.H1, Timeframe.H4),
             evidence=tuple(Evidence(e, 1.0, 1.0, "analysis") for e in setup.evidence),
             timestamp=now,
             status=SignalStatus.TRIGGERED,
