@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import Mapping, Protocol
 from uuid import uuid4
 
@@ -22,8 +22,10 @@ class SignalPipeline:
 
     M15 is the primary trading timeframe. H1 and H4 are higher-timeframe
     confirmation layers used to strengthen or weaken the M15 decision.
-    Broker execution is deliberately absent. A caller must explicitly confirm
-    the strategy trigger before a TRIGGERED signal can be emitted.
+
+    Scores 70-74 are early Telegram alerts only: they deliberately bypass risk
+    vetting and carry RISK_NOT_VETTED status. Scores 75+ continue through the
+    normal trigger and risk-sizing gates before becoming executable signals.
     """
 
     def __init__(
@@ -71,8 +73,6 @@ class SignalPipeline:
         current_price = m15.bars[-1].close
         context = StrategyContext(
             pair=pair,
-            # M15 is the strategy's primary regime. H1/H4 remain available in
-            # context.regimes for confirmation/confluence scoring.
             regime=m15_assessment.regime.value,
             bars={tf.value: snapshot.bars for tf, snapshot in snapshots.items()},
             current_price=current_price,
@@ -82,6 +82,32 @@ class SignalPipeline:
         candidate = selection.selected
         if candidate is None:
             return None, None
+
+        # 70-74 is a deliberately visible early-alert band. Do not run risk
+        # sizing or claim the setup is vetted; Telegram will clearly label it.
+        if 70.0 <= candidate.score < 75.0:
+            direction = Direction.BUY if candidate.direction == "BUY" else Direction.SELL
+            return Signal(
+                signal_id=uuid4(),
+                pair=pair,
+                direction=direction,
+                strategy=candidate.strategy,
+                market_regime=m15_assessment.regime,
+                current_price=current_price,
+                entry=current_price,
+                stop_loss=current_price,
+                take_profit=current_price,
+                risk_reward=0.0,
+                score=candidate.score,
+                confidence=min(100.0, m15_assessment.confidence),
+                trigger="score threshold reached",
+                invalidation="risk vetting required",
+                expiry=now + timedelta(minutes=15),
+                timeframes=(Timeframe.M15, Timeframe.H1, Timeframe.H4),
+                evidence=tuple(Evidence(e, 1.0, 1.0, "analysis") for e in candidate.evidence),
+                timestamp=now,
+                status=SignalStatus.RISK_NOT_VETTED,
+            ), None
 
         setup = self.anticipation_engine.create_watch(
             setup_id=str(uuid4()),
@@ -129,7 +155,6 @@ class SignalPipeline:
             pair=pair,
             direction=direction,
             strategy=setup.strategy,
-            # The signal is an M15 decision strengthened by H1/H4 context.
             market_regime=m15_assessment.regime,
             current_price=current_price,
             entry=current_price,
@@ -150,7 +175,13 @@ class SignalPipeline:
 
     def evaluate_and_notify(self, **kwargs: object) -> tuple[Signal | None, PositionSize | None]:
         signal, position = self.evaluate(**kwargs)
-        if signal is not None and self.notifier is not None and position is not None:
+        if signal is not None and self.notifier is not None:
+            if signal.status is SignalStatus.RISK_NOT_VETTED:
+                risk = "NOT VETTED — score below 75 risk gate"
+            elif position is not None:
+                risk = f"0.5% | volume {position.volume:g}"
+            else:
+                return signal, position
             values: Mapping[str, object] = {
                 "pair": signal.pair,
                 "direction": signal.direction.value,
@@ -158,10 +189,10 @@ class SignalPipeline:
                 "strategy": signal.strategy,
                 "market_regime": signal.market_regime.value,
                 "entry": f"{signal.entry:.8f}",
-                "stop_loss": f"{signal.stop_loss:.8f}",
-                "take_profit": f"{signal.take_profit:.8f}",
-                "risk_reward": f"1:{signal.risk_reward:.2f}",
-                "risk": f"0.5% | volume {position.volume:g}",
+                "stop_loss": "PENDING RISK VETTING" if signal.status is SignalStatus.RISK_NOT_VETTED else f"{signal.stop_loss:.8f}",
+                "take_profit": "PENDING RISK VETTING" if signal.status is SignalStatus.RISK_NOT_VETTED else f"{signal.take_profit:.8f}",
+                "risk_reward": "PENDING RISK VETTING" if signal.status is SignalStatus.RISK_NOT_VETTED else f"1:{signal.risk_reward:.2f}",
+                "risk": risk,
                 "score": int(round(signal.score)),
                 "confidence": f"{signal.confidence:.0f}%",
                 "timeframes": "/".join(tf.value for tf in signal.timeframes),
