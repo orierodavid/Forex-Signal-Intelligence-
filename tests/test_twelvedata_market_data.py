@@ -3,11 +3,13 @@ from __future__ import annotations
 import json
 from datetime import timezone
 
+import pytest
+
 from forex_intelligence.domain import Timeframe
 from forex_intelligence.market_data.twelvedata import TwelveDataMarketDataProvider
 
 
-def test_twelve_data_provider_normalizes_forex_symbol_and_builds_real_snapshot(monkeypatch):
+def test_twelve_data_provider_normalizes_forex_symbol_and_builds_real_snapshot(monkeypatch, tmp_path):
     payload = {
         "values": [
             {
@@ -36,7 +38,7 @@ def test_twelve_data_provider_normalizes_forex_symbol_and_builds_real_snapshot(m
         lambda request, timeout=20: FakeResponse(),
     )
 
-    provider = TwelveDataMarketDataProvider("test-key")
+    provider = TwelveDataMarketDataProvider("test-key", cache_dir=tmp_path)
     snapshot = provider.snapshot("EURUSD", Timeframe.H1, count=50)
 
     assert snapshot.available
@@ -47,7 +49,7 @@ def test_twelve_data_provider_normalizes_forex_symbol_and_builds_real_snapshot(m
     assert snapshot.bars[-1].close == 1.101
 
 
-def test_twelve_data_provider_marks_api_errors_unavailable(monkeypatch):
+def test_twelve_data_provider_marks_api_errors_unavailable(monkeypatch, tmp_path):
     payload = {"status": "error", "message": "invalid api key"}
 
     class FakeResponse:
@@ -65,7 +67,9 @@ def test_twelve_data_provider_marks_api_errors_unavailable(monkeypatch):
         lambda request, timeout=20: FakeResponse(),
     )
 
-    snapshot = TwelveDataMarketDataProvider("bad-key").snapshot("EUR/USD", Timeframe.M15, 50)
+    snapshot = TwelveDataMarketDataProvider("bad-key", cache_dir=tmp_path).snapshot(
+        "EUR/USD", Timeframe.M15, 50
+    )
 
     assert not snapshot.available
     assert snapshot.quality == "UNAVAILABLE"
