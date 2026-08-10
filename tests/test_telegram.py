@@ -64,6 +64,7 @@ def test_format_marks_early_score_as_risk_not_vetted() -> None:
     assert "STATUS: RISK_NOT_VETTED" in text
     assert "Risk: NOT VETTED — score below 75 risk gate" in text
     assert "Stop Loss: PENDING RISK VETTING" in text
+    assert "EXECUTION: DO NOT TRADE — RISK NOT VETTED" in text
 
 
 def test_notifier_sends_using_configured_transport() -> None:
