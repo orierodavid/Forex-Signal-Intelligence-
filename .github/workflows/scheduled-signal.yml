@@ -8,6 +8,11 @@ on:
 permissions:
   contents: read
 
+# Prevent overlapping scheduled runs from reading/writing the same quota cache.
+concurrency:
+  group: scheduled-forex-signal
+  cancel-in-progress: false
+
 jobs:
   signal:
     # Cloud-only runner: no local Windows machine or MT5 terminal required.
@@ -28,6 +33,14 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+
+      - name: Restore Twelve Data cache
+        uses: actions/cache@v4
+        with:
+          path: .cache/twelvedata
+          key: twelvedata-snapshots-${{ github.run_id }}
+          restore-keys: |
+            twelvedata-snapshots-
 
       - name: Set up Python
         uses: actions/setup-python@v5
