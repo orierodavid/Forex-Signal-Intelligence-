@@ -22,20 +22,19 @@ class StrategySelector:
     """Select the single best strategy for an M15 trading decision.
 
     M15 is the primary decision timeframe. H1 and H4 are confirmation layers
-    that can strengthen the ranking of an already-qualified M15 setup, but
-    they do not replace the M15 market direction.
+    that can strengthen the ranking of an M15 setup, but they do not replace
+    the M15 market direction.
 
-    A candidate must score at least 75/100 on its own. When M15 is clearly
-    directional, strategies fighting that M15 direction are not eligible for
-    selection. This prevents a higher-scoring opposing strategy from winning
-    solely because its raw score is numerically larger.
+    70/100 is now the Telegram alert floor. Scores from 70 through 74 are
+    intentionally surfaced as early signals but remain outside the risk-vetted
+    trading gate. A score of 75 or higher is eligible for normal risk vetting.
 
-    H1/H4 confluence bonuses are used only for ranking and never manufacture
-    eligibility. Opposing candidates in neutral M15 regimes remain ambiguous
-    when their raw scores are too close.
+    When M15 is clearly directional, strategies fighting that M15 direction
+    are not eligible for selection. This prevents a higher-scoring opposing
+    strategy from winning solely because its raw score is numerically larger.
     """
 
-    def __init__(self, strategies: Iterable[Strategy] = DEFAULT_STRATEGIES, minimum_score: float = 75.0) -> None:
+    def __init__(self, strategies: Iterable[Strategy] = DEFAULT_STRATEGIES, minimum_score: float = 70.0) -> None:
         if not 0 <= minimum_score <= 100:
             raise ValueError("minimum_score must be between 0 and 100")
         self.strategies = tuple(strategies)
