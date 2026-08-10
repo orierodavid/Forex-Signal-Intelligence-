@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Iterable, Mapping, Sequence
+from typing import Sequence
 
 from forex_intelligence.strategy import StrategyContext, StrategySelector
 
@@ -26,6 +26,14 @@ class BacktestTrade:
     stop_loss: float
     take_profit: float
     outcome_r: float
+
+    @property
+    def risk_vetted(self) -> bool:
+        return self.score >= 75.0
+
+    @property
+    def risk_status(self) -> str:
+        return "VETTED" if self.risk_vetted else "RISK_NOT_VETTED"
 
 
 @dataclass(frozen=True)
@@ -59,14 +67,12 @@ class BacktestReport:
         gross_loss = abs(sum(t.outcome_r for t in self.trades if t.outcome_r < 0))
         return gross_profit / gross_loss if gross_loss else float("inf") if gross_profit else 0.0
 
+    @property
+    def risk_not_vetted_trades(self) -> int:
+        return sum(1 for trade in self.trades if not trade.risk_vetted)
+
 
 def _regime(closes: Sequence[float]) -> str:
-    """Conservative regime proxy used only when replaying raw candles.
-
-    The live pipeline supplies the production RegimeEngine. The backtester
-    intentionally keeps this function small and deterministic so historical
-    replay cannot accidentally use future candles.
-    """
     if len(closes) < 20:
         return "TRANSITION"
     first = sum(closes[-20:-10]) / 10
@@ -101,20 +107,20 @@ def run_backtest(
     *,
     selector: StrategySelector | None = None,
     minimum_score: float = 70.0,
-    risk_score: float = 75.0,
     reward_risk: float = 2.0,
     lookback: int = 120,
 ) -> BacktestReport:
-    """Replay the production strategy-selection concept without look-ahead.
+    """Replay strategy selection without look-ahead bias.
 
-    M15 is the decision timeframe. H1/H4 are built only from candles already
-    closed at the decision point. A trade is entered on the next M15 bar's
-    open, never on the same candle that generated the setup.
+    M15 is the decision timeframe. H1/H4 are built only from already-closed
+    M15 candles. A setup detected on bar i enters at bar i+1 open. Scores
+    70-74 remain in the report as RISK_NOT_VETTED; 75+ are normal.
 
-    Scores >= 70 are recorded as alerts. Scores >= 75 are marked normally
-    qualified. The report retains the 70-74 trades so we can measure whether
-    the risk-not-vetted band has useful predictive value.
+    If an OHLC candle touches both SL and TP, SL wins because OHLC data cannot
+    establish which level was touched first.
     """
+    if minimum_score < 70:
+        raise ValueError("minimum_score must be at least 70")
     selector = selector or StrategySelector(minimum_score=minimum_score)
     m15 = tuple(m15_bars)
     h1 = _aggregate(m15, 4)
@@ -124,10 +130,7 @@ def run_backtest(
     for i in range(max(lookback, 30), len(m15) - 1):
         closed_m15 = m15[:i]
         current = closed_m15[-1]
-        m15_closes = [c.close for c in closed_m15]
-        m15_regime = _regime(m15_closes)
-
-        # Only completed H1/H4 candles are exposed to the selector.
+        m15_regime = _regime([c.close for c in closed_m15])
         completed_h1 = tuple(c for c in h1 if c.timestamp <= current.timestamp)
         completed_h4 = tuple(c for c in h4 if c.timestamp <= current.timestamp)
         context = StrategyContext(
@@ -135,7 +138,11 @@ def run_backtest(
             regime=m15_regime,
             bars={"M15": closed_m15, "H1": completed_h1, "H4": completed_h4},
             current_price=current.close,
-            regimes={"M15": m15_regime, "H1": _regime([c.close for c in completed_h1]), "H4": _regime([c.close for c in completed_h4])},
+            regimes={
+                "M15": m15_regime,
+                "H1": _regime([c.close for c in completed_h1]),
+                "H4": _regime([c.close for c in completed_h4]),
+            },
         )
         selection = selector.evaluate(context)
         candidate = selection.selected
@@ -166,9 +173,6 @@ def run_backtest(
             else:
                 hit_stop = future.high >= stop
                 hit_target = future.low <= target
-
-            # Conservative same-candle handling: if both are touched, count
-            # the stop first because OHLC alone cannot establish tick order.
             if hit_stop:
                 outcome = -1.0
                 break
