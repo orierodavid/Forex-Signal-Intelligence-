@@ -39,11 +39,11 @@ def test_scores_below_70_are_rejected_even_with_alignment():
 
 def test_score_70_is_selected_for_early_telegram_alert():
     selector = StrategySelector((Candidate("SUPPORT_RESISTANCE", result("SUPPORT_RESISTANCE", "BUY", 70)),))
-    selection = selector.evaluate(context())
+    selection = selector.evaluate(context("RANGE", "RANGE", "TREND_UP"))
     assert selection.selected is not None
     assert selection.selected.strategy == "SUPPORT_RESISTANCE"
     assert selection.selected.direction == "BUY"
-    assert selection.selected.score == 75
+    assert selection.selected.score == 70
 
 
 def test_best_candidate_at_75_is_selected_and_alignment_ranks_it():
