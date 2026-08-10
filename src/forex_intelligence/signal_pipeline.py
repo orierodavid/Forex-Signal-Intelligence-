@@ -24,8 +24,9 @@ class SignalPipeline:
     confirmation layers used to strengthen or weaken the M15 decision.
 
     Scores 70-74 are early Telegram alerts only: they deliberately bypass risk
-    vetting and carry RISK_NOT_VETTED status. Scores 75+ continue through the
-    normal trigger and risk-sizing gates before becoming executable signals.
+    sizing/vetting but still receive complete technical entry, stop-loss and
+    take-profit levels. The alert title/status is RISK_NOT_VETTED. Scores 75+
+    continue through the normal trigger and risk-sizing gates.
     """
 
     def __init__(
@@ -45,6 +46,26 @@ class SignalPipeline:
         self.risk_engine = risk_engine or RiskEngine()
         self.notifier = notifier
 
+    @staticmethod
+    def _technical_levels(m15: MarketSnapshot, direction: str, current_price: float) -> tuple[float, float] | None:
+        closed_bars = m15.bars[:-1] if len(m15.bars) > 1 else m15.bars
+        if len(closed_bars) < 5:
+            return None
+        recent = closed_bars[-5:]
+        if direction == "BUY":
+            stop_loss = min(bar.low for bar in recent)
+            stop_distance = current_price - stop_loss
+            if stop_distance <= 0:
+                return None
+            take_profit = current_price + stop_distance * 2.0
+        else:
+            stop_loss = max(bar.high for bar in recent)
+            stop_distance = stop_loss - current_price
+            if stop_distance <= 0:
+                return None
+            take_profit = current_price - stop_distance * 2.0
+        return stop_loss, take_profit
+
     def evaluate(
         self,
         *,
@@ -63,8 +84,6 @@ class SignalPipeline:
 
         m15 = snapshots[Timeframe.M15]
         m15_assessment = assessments[Timeframe.M15]
-        # Only the primary M15 timeframe can make the market untradeable for
-        # this strategy. H1/H4 are confirmation inputs, not hard blockers.
         if m15_assessment.regime == MarketRegime.UNTRADEABLE:
             return None, None
         if not m15.available or not m15.bars:
@@ -83,10 +102,13 @@ class SignalPipeline:
         if candidate is None:
             return None, None
 
-        # 70-74 is a deliberately visible early-alert band. Do not run risk
-        # sizing or claim the setup is vetted; Telegram will clearly label it.
         if 70.0 <= candidate.score < 75.0:
+            levels = self._technical_levels(m15, candidate.direction, current_price)
+            if levels is None:
+                return None, None
+            stop_loss, take_profit = levels
             direction = Direction.BUY if candidate.direction == "BUY" else Direction.SELL
+            stop_distance = abs(current_price - stop_loss)
             return Signal(
                 signal_id=uuid4(),
                 pair=pair,
@@ -95,9 +117,9 @@ class SignalPipeline:
                 market_regime=m15_assessment.regime,
                 current_price=current_price,
                 entry=current_price,
-                stop_loss=current_price,
-                take_profit=current_price,
-                risk_reward=0.0,
+                stop_loss=stop_loss,
+                take_profit=take_profit,
+                risk_reward=2.0,
                 score=candidate.score,
                 confidence=min(100.0, m15_assessment.confidence),
                 trigger="score threshold reached",
@@ -127,22 +149,11 @@ class SignalPipeline:
         if setup.state is not AnticipationState.TRIGGERED:
             return None, None
 
-        closed_bars = m15.bars[:-1] if len(m15.bars) > 1 else m15.bars
-        if len(closed_bars) < 5:
+        levels = self._technical_levels(m15, setup.direction, current_price)
+        if levels is None:
             return None, None
-        recent = closed_bars[-5:]
-        if setup.direction == "BUY":
-            stop_loss = min(bar.low for bar in recent)
-            stop_distance = current_price - stop_loss
-            take_profit = current_price + stop_distance * 2.0
-            direction = Direction.BUY
-        else:
-            stop_loss = max(bar.high for bar in recent)
-            stop_distance = stop_loss - current_price
-            take_profit = current_price - stop_distance * 2.0
-            direction = Direction.SELL
-        if stop_distance <= 0:
-            return None, None
+        stop_loss, take_profit = levels
+        direction = Direction.BUY if setup.direction == "BUY" else Direction.SELL
 
         position = self.risk_engine.calculate_position_size(
             equity=equity,
@@ -177,7 +188,7 @@ class SignalPipeline:
         signal, position = self.evaluate(**kwargs)
         if signal is not None and self.notifier is not None:
             if signal.status is SignalStatus.RISK_NOT_VETTED:
-                risk = "NOT VETTED — score below 75 risk gate"
+                risk = "NOT VETTED"
             elif position is not None:
                 risk = f"0.5% | volume {position.volume:g}"
             else:
@@ -189,9 +200,9 @@ class SignalPipeline:
                 "strategy": signal.strategy,
                 "market_regime": signal.market_regime.value,
                 "entry": f"{signal.entry:.8f}",
-                "stop_loss": "PENDING RISK VETTING" if signal.status is SignalStatus.RISK_NOT_VETTED else f"{signal.stop_loss:.8f}",
-                "take_profit": "PENDING RISK VETTING" if signal.status is SignalStatus.RISK_NOT_VETTED else f"{signal.take_profit:.8f}",
-                "risk_reward": "PENDING RISK VETTING" if signal.status is SignalStatus.RISK_NOT_VETTED else f"1:{signal.risk_reward:.2f}",
+                "stop_loss": f"{signal.stop_loss:.8f}",
+                "take_profit": f"{signal.take_profit:.8f}",
+                "risk_reward": f"1:{signal.risk_reward:.2f}",
                 "risk": risk,
                 "score": int(round(signal.score)),
                 "confidence": f"{signal.confidence:.0f}%",
