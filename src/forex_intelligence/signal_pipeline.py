@@ -58,11 +58,13 @@ class SignalPipeline:
             for timeframe in (Timeframe.H4, Timeframe.H1, Timeframe.M15)
         }
         assessments = {tf: self.regime_engine.assess(snapshot) for tf, snapshot in snapshots.items()}
-        if any(assessment.regime == MarketRegime.UNTRADEABLE for assessment in assessments.values()):
-            return None, None
 
         m15 = snapshots[Timeframe.M15]
         m15_assessment = assessments[Timeframe.M15]
+        # Only the primary M15 timeframe can make the market untradeable for
+        # this strategy. H1/H4 are confirmation inputs, not hard blockers.
+        if m15_assessment.regime == MarketRegime.UNTRADEABLE:
+            return None, None
         if not m15.available or not m15.bars:
             return None, None
 
