@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from datetime import datetime, timedelta
 from typing import Sequence
 
 from forex_intelligence.strategy import StrategyContext, StrategySelector
@@ -26,6 +27,8 @@ class BacktestTrade:
     stop_loss: float
     take_profit: float
     outcome_r: float
+    exit_timestamp: str | None = None
+    entry_timestamp: str | None = None
 
     @property
     def risk_vetted(self) -> bool:
@@ -55,11 +58,17 @@ class BacktestReport:
 
     @property
     def win_rate(self) -> float:
-        return self.wins / self.total_trades * 100 if self.total_trades else 0.0
+        resolved = self.wins + self.losses
+        return self.wins / resolved * 100 if resolved else 0.0
 
     @property
     def net_r(self) -> float:
         return sum(trade.outcome_r for trade in self.trades)
+
+    @property
+    def average_r(self) -> float:
+        resolved = [trade.outcome_r for trade in self.trades if trade.outcome_r != 0]
+        return sum(resolved) / len(resolved) if resolved else 0.0
 
     @property
     def profit_factor(self) -> float:
@@ -70,6 +79,30 @@ class BacktestReport:
     @property
     def risk_not_vetted_trades(self) -> int:
         return sum(1 for trade in self.trades if not trade.risk_vetted)
+
+    @property
+    def max_drawdown_r(self) -> float:
+        equity = peak = 0.0
+        max_drawdown = 0.0
+        for trade in self.trades:
+            equity += trade.outcome_r
+            peak = max(peak, equity)
+            max_drawdown = max(max_drawdown, peak - equity)
+        return max_drawdown
+
+    @property
+    def trades_per_day(self) -> float:
+        if not self.trades:
+            return 0.0
+        dates = [datetime.fromisoformat(t.timestamp).date() for t in self.trades]
+        days = (max(dates) - min(dates)).days + 1
+        return len(self.trades) / max(days, 1)
+
+    def by_strategy(self) -> dict[str, "BacktestReport"]:
+        groups: dict[str, list[BacktestTrade]] = {}
+        for trade in self.trades:
+            groups.setdefault(trade.strategy, []).append(trade)
+        return {name: BacktestReport(self.pair, tuple(items)) for name, items in groups.items()}
 
 
 def _regime(closes: Sequence[float]) -> str:
@@ -86,6 +119,7 @@ def _regime(closes: Sequence[float]) -> str:
 
 
 def _aggregate(bars: Sequence[Candle], size: int) -> tuple[Candle, ...]:
+    """Aggregate consecutive M15 candles; caller must provide UTC-aligned data."""
     result: list[Candle] = []
     for index in range(0, len(bars), size):
         chunk = bars[index:index + size]
@@ -101,6 +135,13 @@ def _aggregate(bars: Sequence[Candle], size: int) -> tuple[Candle, ...]:
     return tuple(result)
 
 
+def _find_pending_entry(candles: Sequence[Candle], start: int, entry: float) -> int | None:
+    for i in range(start, len(candles)):
+        if candles[i].low <= entry <= candles[i].high:
+            return i
+    return None
+
+
 def run_backtest(
     pair: str,
     m15_bars: Sequence[Candle],
@@ -110,17 +151,21 @@ def run_backtest(
     reward_risk: float = 2.0,
     lookback: int = 120,
 ) -> BacktestReport:
-    """Replay strategy selection without look-ahead bias.
+    """Replay the strategy path without look-ahead bias.
 
     M15 is the decision timeframe. H1/H4 are built only from already-closed
-    M15 candles. A setup detected on bar i enters at bar i+1 open. Scores
-    70-74 remain in the report as RISK_NOT_VETTED; 75+ are normal.
+    M15 candles. A signal creates a pending entry at its explicit entry price;
+    the position is opened only when a subsequent M15 candle trades through
+    that price. 70-74 remains RISK_NOT_VETTED and 75+ is VETTED.
 
-    If an OHLC candle touches both SL and TP, SL wins because OHLC data cannot
-    establish which level was touched first.
+    Once triggered, SL/TP are checked from the entry candle onward. If an OHLC
+    candle touches both levels, SL wins conservatively because OHLC data cannot
+    establish intrabar ordering.
     """
     if minimum_score < 70:
         raise ValueError("minimum_score must be at least 70")
+    if reward_risk <= 0:
+        raise ValueError("reward_risk must be positive")
     selector = selector or StrategySelector(minimum_score=minimum_score)
     m15 = tuple(m15_bars)
     h1 = _aggregate(m15, 4)
@@ -149,8 +194,9 @@ def run_backtest(
         if candidate is None or candidate.score < minimum_score:
             continue
 
-        entry_bar = m15[i]
-        entry = entry_bar.open
+        # Signal price is the proposed/pending entry, not an assumed fill at
+        # the next candle's open.
+        entry = current.close
         recent = closed_m15[-5:]
         if candidate.direction == "BUY":
             stop = min(c.low for c in recent)
@@ -165,8 +211,13 @@ def run_backtest(
                 continue
             target = entry - distance * reward_risk
 
+        entry_index = _find_pending_entry(m15, i + 1, entry)
+        if entry_index is None:
+            continue
+
         outcome: float | None = None
-        for future in m15[i:]:
+        exit_timestamp: str | None = None
+        for future in m15[entry_index:]:
             if candidate.direction == "BUY":
                 hit_stop = future.low <= stop
                 hit_target = future.high >= target
@@ -175,16 +226,18 @@ def run_backtest(
                 hit_target = future.low <= target
             if hit_stop:
                 outcome = -1.0
+                exit_timestamp = future.timestamp
                 break
             if hit_target:
                 outcome = reward_risk
+                exit_timestamp = future.timestamp
                 break
         if outcome is None:
             continue
 
         trades.append(BacktestTrade(
             pair=pair,
-            timestamp=entry_bar.timestamp,
+            timestamp=current.timestamp,
             strategy=candidate.strategy,
             direction=candidate.direction,
             score=candidate.score,
@@ -192,6 +245,8 @@ def run_backtest(
             stop_loss=stop,
             take_profit=target,
             outcome_r=outcome,
+            entry_timestamp=m15[entry_index].timestamp,
+            exit_timestamp=exit_timestamp,
         ))
 
     return BacktestReport(pair=pair, trades=tuple(trades))
