@@ -19,22 +19,36 @@ class StrategySelection:
 
 
 class StrategySelector:
-    """Select the single best regime/timeframe-compatible strategy.
+    """Select the single best strategy for an M15 trading decision.
 
-    Quality is gated on the strategy's own score. Higher-timeframe alignment
-    can rank an already-qualified candidate more strongly, but it can never
-    manufacture eligibility for a candidate scoring below 80.
+    M15 is the primary decision timeframe. H1 and H4 are confirmation layers
+    that can strengthen the ranking of an already-qualified M15 setup, but
+    they do not replace the M15 market direction.
 
-    Opposing candidates are treated as ambiguous using their raw strategy
-    scores. Confluence bonuses must not erase genuine disagreement between
-    otherwise competing setups.
+    A candidate must score at least 75/100 on its own. When M15 is clearly
+    directional, strategies fighting that M15 direction are not eligible for
+    selection. This prevents a higher-scoring opposing strategy from winning
+    solely because its raw score is numerically larger.
+
+    H1/H4 confluence bonuses are used only for ranking and never manufacture
+    eligibility. Opposing candidates in neutral M15 regimes remain ambiguous
+    when their raw scores are too close.
     """
 
-    def __init__(self, strategies: Iterable[Strategy] = DEFAULT_STRATEGIES, minimum_score: float = 80.0) -> None:
+    def __init__(self, strategies: Iterable[Strategy] = DEFAULT_STRATEGIES, minimum_score: float = 75.0) -> None:
         if not 0 <= minimum_score <= 100:
             raise ValueError("minimum_score must be between 0 and 100")
         self.strategies = tuple(strategies)
         self.minimum_score = minimum_score
+
+    @staticmethod
+    def _primary_direction(context: StrategyContext) -> str | None:
+        regime = context.regimes.get("M15", context.regime)
+        if regime in {"STRONG_TREND_UP", "TREND_UP"}:
+            return "BUY"
+        if regime in {"STRONG_TREND_DOWN", "TREND_DOWN"}:
+            return "SELL"
+        return None
 
     @staticmethod
     def _alignment_bonus(candidate: StrategyResult, context: StrategyContext) -> float:
@@ -58,10 +72,14 @@ class StrategySelector:
             replace(candidate, score=min(100.0, candidate.score + self._alignment_bonus(candidate, context)))
             for candidate in raw_candidates
         )
+
+        primary_direction = self._primary_direction(context)
         eligible_pairs = [
             (raw, ranked)
             for raw, ranked in zip(raw_candidates, candidates)
-            if raw.eligible and raw.score >= self.minimum_score
+            if raw.eligible
+            and raw.score >= self.minimum_score
+            and (primary_direction is None or raw.direction == primary_direction)
         ]
         if not eligible_pairs:
             return StrategySelection(None, candidates, self.minimum_score)
@@ -74,9 +92,9 @@ class StrategySelector:
             for raw, ranked in eligible_pairs[1:]
             if ranked.direction != winner.direction
         ]
-        # Use raw strategy scores for ambiguity. H4/H1 bonuses are confluence
-        # evidence for ranking, not evidence that should manufacture a decisive
-        # edge over a genuinely competing opposing setup.
-        if opposing and winner_raw.score - opposing[0][0].score < 5.0:
+        # In neutral M15 regimes, use raw strategy scores for ambiguity. H1/H4
+        # bonuses are confluence evidence, not evidence that should manufacture
+        # a decisive edge over a genuinely competing opposing setup.
+        if primary_direction is None and opposing and winner_raw.score - opposing[0][0].score < 5.0:
             return StrategySelection(None, candidates, self.minimum_score)
         return StrategySelection(winner, candidates, self.minimum_score)
