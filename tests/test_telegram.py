@@ -50,6 +50,22 @@ def test_format_contains_trade_details_and_manual_execution() -> None:
     assert "EXECUTION: MANUAL — Exness MT5" in text
 
 
+def test_format_marks_early_score_as_risk_not_vetted() -> None:
+    text = format_signal(
+        make_signal(
+            status="RISK_NOT_VETTED",
+            score=72,
+            risk="NOT VETTED — score below 75 risk gate",
+            stop_loss="PENDING RISK VETTING",
+            take_profit="PENDING RISK VETTING",
+            risk_reward="PENDING RISK VETTING",
+        )
+    )
+    assert "STATUS: RISK_NOT_VETTED" in text
+    assert "Risk: NOT VETTED — score below 75 risk gate" in text
+    assert "Stop Loss: PENDING RISK VETTING" in text
+
+
 def test_notifier_sends_using_configured_transport() -> None:
     transport = FakeTransport()
     notifier = TelegramNotifier("secret-token", "123", transport)
