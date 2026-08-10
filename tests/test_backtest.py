@@ -21,8 +21,8 @@ def test_backtest_report_metrics_are_deterministic():
     report = BacktestReport(
         pair="EURUSD",
         trades=(
-            BacktestTrade("EURUSD", "t1", "X", "BUY", 82, 1.1, 1.0, 1.3, 2.0),
-            BacktestTrade("EURUSD", "t2", "X", "BUY", 78, 1.2, 1.3, 1.0, -1.0),
+            BacktestTrade("EURUSD", "2026-01-01T00:00:00", "X", "BUY", 82, 1.1, 1.0, 1.3, 2.0),
+            BacktestTrade("EURUSD", "2026-01-01T00:15:00", "X", "BUY", 78, 1.2, 1.3, 1.0, -1.0),
         ),
     )
     assert report.total_trades == 2
@@ -30,7 +30,20 @@ def test_backtest_report_metrics_are_deterministic():
     assert report.losses == 1
     assert report.win_rate == 50.0
     assert report.net_r == 1.0
+    assert report.average_r == 0.5
     assert report.profit_factor == 2.0
+    assert report.max_drawdown_r == 1.0
+    assert report.risk_not_vetted_trades == 0
+    assert report.trades_per_day == 2.0
+
+
+def test_backtest_report_marks_70_to_74_as_risk_not_vetted():
+    report = BacktestReport(
+        pair="EURUSD",
+        trades=(BacktestTrade("EURUSD", "2026-01-01T00:00:00", "X", "BUY", 70, 1.1, 1.0, 1.3, 2.0),),
+    )
+    assert report.risk_not_vetted_trades == 1
+    assert report.trades[0].risk_status == "RISK_NOT_VETTED"
 
 
 def test_backtest_replays_closed_candles_and_produces_report():
@@ -43,3 +56,5 @@ def test_backtest_replays_closed_candles_and_produces_report():
         assert trade.entry > 0
         assert trade.stop_loss > 0
         assert trade.take_profit > 0
+        assert trade.entry_timestamp is not None
+        assert trade.exit_timestamp is not None
