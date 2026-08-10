@@ -88,6 +88,11 @@ class TelegramNotifier:
 
 
 def format_signal(signal: TelegramSignal) -> str:
+    execution = (
+        "EXECUTION: DO NOT TRADE — RISK NOT VETTED"
+        if signal.status == "RISK_NOT_VETTED"
+        else "EXECUTION: MANUAL — Exness MT5"
+    )
     return "\n".join(
         (
             "⚡ FOREX TRADE SIGNAL",
@@ -113,7 +118,7 @@ def format_signal(signal: TelegramSignal) -> str:
             f"Invalidation: {signal.invalidation}",
             f"Expiry: {signal.expiry}",
             "",
-            "EXECUTION: MANUAL — Exness MT5",
+            execution,
             "",
             "This is a probabilistic signal, not a guarantee.",
         )
