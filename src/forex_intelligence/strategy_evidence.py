@@ -69,8 +69,11 @@ def _context(pair: str, bars: Sequence[Bar], i: int) -> StrategyContext:
                            current_price=closed[-1].close, regimes=regimes)
 
 
-def _session(timestamp: str) -> str:
-    hour = datetime.fromisoformat(timestamp.replace("Z", "+00:00")).hour
+def _session(timestamp: datetime) -> str:
+    """Classify a UTC-aware bar timestamp into the evidence session."""
+    if not isinstance(timestamp, datetime):
+        raise TypeError(f"bar timestamp must be datetime, got {type(timestamp).__name__}")
+    hour = timestamp.hour
     if 7 <= hour < 12:
         return "LONDON"
     if 12 <= hour < 17:
