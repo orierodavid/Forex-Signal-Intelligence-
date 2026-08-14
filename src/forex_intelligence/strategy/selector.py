@@ -55,12 +55,15 @@ class StrategySelector:
         return bonus
 
     def evaluate(self, context: StrategyContext) -> StrategySelection:
+        # Entry quality may adjust live candidates, but precomputed candidates
+        # must retain their raw score so the 70-point threshold cannot be
+        # crossed merely because of H1/H4 alignment.
         gated = tuple(gate_candidate(context, strategy.evaluate(context), self.minimum_entry_quality) for strategy in self.strategies)
         candidates = tuple(
             StrategyResult(
                 strategy=candidate.strategy,
                 direction=candidate.direction,
-                score=(candidate.score if not context.bars.get("M15") else min(100.0, candidate.score + self._alignment_bonus(candidate, context))) if candidate.eligible else candidate.score,
+                score=candidate.score,
                 eligible=candidate.eligible,
                 trigger=candidate.trigger,
                 invalidation=candidate.invalidation,
@@ -80,9 +83,27 @@ class StrategySelector:
         if not eligible_pairs:
             return StrategySelection(None, candidates, self.minimum_score)
 
-        eligible_pairs.sort(key=lambda candidate: (-candidate.score, candidate.strategy))
-        winner = eligible_pairs[0]
-        opposing = [candidate for candidate in eligible_pairs[1:] if candidate.direction != winner.direction]
-        if primary_direction is None and opposing and winner.score - opposing[0].score < 5.0:
-            return StrategySelection(None, candidates, self.minimum_score)
-        return StrategySelection(winner, candidates, self.minimum_score)
+        ranked = sorted(
+            eligible_pairs,
+            key=lambda candidate: (-(candidate.score + self._alignment_bonus(candidate, context)), candidate.strategy),
+        )
+        winner = ranked[0]
+        winner_score = min(100.0, winner.score + self._alignment_bonus(winner, context))
+
+        opposing = [candidate for candidate in ranked[1:] if candidate.direction != winner.direction]
+        if primary_direction is None and opposing:
+            opposing_score = opposing[0].score + self._alignment_bonus(opposing[0], context)
+            if winner_score - opposing_score < 5.0:
+                return StrategySelection(None, candidates, self.minimum_score)
+
+        selected = StrategyResult(
+            strategy=winner.strategy,
+            direction=winner.direction,
+            score=winner_score,
+            eligible=winner.eligible,
+            trigger=winner.trigger,
+            invalidation=winner.invalidation,
+            evidence=winner.evidence,
+            metadata=winner.metadata,
+        )
+        return StrategySelection(selected, candidates, self.minimum_score)
