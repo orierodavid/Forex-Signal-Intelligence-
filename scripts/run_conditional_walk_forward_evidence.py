@@ -8,7 +8,6 @@ from typing import Sequence
 from forex_intelligence.domain import Timeframe
 from forex_intelligence.market_data.models import Bar
 from forex_intelligence.market_data.twelvedata import TwelveDataMarketDataProvider
-from forex_intelligence.strategy.base import StrategyContext
 from forex_intelligence.strategy.strategies import DEFAULT_STRATEGIES
 from forex_intelligence.strategy_evidence import _context, _levels, _outcome_r, _session, _volatility_bucket
 
@@ -57,7 +56,7 @@ def _trade_rows(pair: str, bars: Sequence[Bar], start: int, end: int):
                 outcome = _outcome_r(bars, i, result.direction, levels[0], levels[1], rr, 120)
                 if outcome is None:
                     continue
-                rows.append((strategy.__class__.__name__ if False else result.strategy, regime, session, volatility, rr, outcome))
+                rows.append((result.strategy, regime, session, volatility, rr, outcome))
     return rows
 
 
@@ -73,7 +72,8 @@ def _stats(values: Sequence[float]):
         equity += v
         peak = max(peak, equity)
         dd = max(dd, peak - equity)
-    return len(values), wins, net / len(values), gp / gl if gl else (float("inf") if gp else 0.0), dd
+    pf = gp / gl if gl else (float("inf") if gp else 0.0)
+    return len(values), wins, net / len(values), pf, dd
 
 
 def run_conditional_walk_forward(pair: str, bars: Sequence[Bar]) -> tuple[ConditionalWalkForward, ...]:
@@ -87,14 +87,17 @@ def run_conditional_walk_forward(pair: str, bars: Sequence[Bar]) -> tuple[Condit
         test_end = min(len(bars), test_start + TEST_BARS)
         train = _trade_rows(pair, bars, train_start, test_start)
         test = _trade_rows(pair, bars, test_start, test_end)
+
         train_buckets = {}
         test_buckets = {}
-        for key, *_rest, outcome in train:
+        for row in train:
+            key, outcome = row[:-1], row[-1]
             train_buckets.setdefault(key, []).append(outcome)
-        for key, *_rest, outcome in test:
+        for row in test:
+            key, outcome = row[:-1], row[-1]
             test_buckets.setdefault(key, []).append(outcome)
 
-        # Only promote a condition when it was positive in the preceding window.
+        # A condition is promoted only from the preceding training window.
         for key, train_values in train_buckets.items():
             if len(train_values) < MIN_TRAIN_TRADES:
                 continue
