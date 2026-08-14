@@ -12,13 +12,7 @@ def _v(bar: Any, key: str) -> float:
 
 
 def entry_quality(context: StrategyContext, candidate: StrategyResult) -> float:
-    """Score whether an M15 entry is timely and sufficiently supported.
-
-    If closed M15 bars are unavailable, quality is intentionally neutral rather
-    than zero: selector unit tests and non-market-data callers may only provide
-    a precomputed StrategyResult. The live/backtest path supplies bars and gets
-    the full entry-quality calculation.
-    """
+    """Score whether an M15 entry is timely and sufficiently supported."""
     bars: Sequence[Any] = context.bars.get("M15") or ()
     if not bars or candidate.direction not in {"BUY", "SELL"}:
         return 50.0 if candidate.direction in {"BUY", "SELL"} else 0.0
@@ -43,7 +37,6 @@ def entry_quality(context: StrategyContext, candidate: StrategyResult) -> float:
         return min(100.0, confirmation + body_component)
     location = ((close - prior_low) / span) if candidate.direction == "BUY" else ((prior_high - close) / span)
     location_quality = max(0.0, 1.0 - max(0.0, location - 0.70) / 0.30)
-
     bullish = {"TREND_UP", "STRONG_TREND_UP"}
     bearish = {"TREND_DOWN", "STRONG_TREND_DOWN"}
     aligned = bullish if candidate.direction == "BUY" else bearish
@@ -57,7 +50,6 @@ def entry_quality(context: StrategyContext, candidate: StrategyResult) -> float:
     if h4_aligned:
         location_quality = max(location_quality, 0.20)
     location_component = 30.0 * location_quality
-
     closes = [_v(b, "close") for b in recent]
     drift = closes[-1] - mean(closes[:-1])
     drift_ratio = abs(drift) / max(span, 1e-12)
@@ -86,8 +78,9 @@ def gate_candidate(context: StrategyContext, candidate: StrategyResult, minimum_
             metadata=metadata,
         )
 
-    # Do not reject a precomputed candidate merely because this caller did not
-    # supply market bars. The real market-data path has bars and is gated below.
+    # Unit/test callers without bars must preserve the precomputed candidate,
+    # but the original score must remain authoritative. Entry quality must not
+    # inflate a candidate across the 70-point qualification threshold.
     if not bars_available:
         return StrategyResult(
             strategy=candidate.strategy,
