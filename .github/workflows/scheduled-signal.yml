@@ -22,7 +22,10 @@ jobs:
       TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
       TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
       TWELVE_DATA_API_KEY: ${{ secrets.TWELVE_DATA_API_KEY }}
-      FOREX_SYMBOLS: ${{ vars.FOREX_SYMBOLS || 'EURUSD,GBPUSD,USDJPY,EURJPY,XAUUSD' }}
+      # Live signal universe is deliberately fixed to the instruments with
+      # current walk-forward/conditional evidence coverage. Do not let a stale
+      # repository variable silently reintroduce unevidenced instruments.
+      FOREX_SYMBOLS: "EURUSD,USDCHF,AUDUSD,USDCAD,NZDUSD,XAUUSD"
       SIGNAL_EQUITY: ${{ vars.SIGNAL_EQUITY || '1000' }}
       TICK_SIZE: ${{ vars.TICK_SIZE || '0.00001' }}
       TICK_VALUE: ${{ vars.TICK_VALUE || '1' }}
