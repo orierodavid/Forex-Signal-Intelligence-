@@ -3,6 +3,7 @@ name: Strategy Evidence Matrix
 on:
   workflow_dispatch:
   push:
+    branches: [main]
     paths:
       - 'scripts/run_strategy_evidence.py'
       - 'src/forex_intelligence/strategy_evidence.py'
@@ -32,4 +33,5 @@ jobs:
         env:
           MARKET_DATA_API_KEY: ${{ secrets.TWELVE_DATA_API_KEY }}
           TWELVE_DATA_API_KEY: ${{ secrets.TWELVE_DATA_API_KEY }}
+          PYTHONPATH: src
         run: python scripts/run_strategy_evidence.py
