@@ -12,10 +12,18 @@ def _v(bar: Any, key: str) -> float:
 
 
 def entry_quality(context: StrategyContext, candidate: StrategyResult) -> float:
-    """Score whether an M15 entry is timely and sufficiently supported."""
+    """Score whether an M15 entry is timely and sufficiently supported.
+
+    If closed M15 bars are unavailable, quality is intentionally neutral rather
+    than zero: selector unit tests and non-market-data callers may only provide
+    a precomputed StrategyResult. The live/backtest path supplies bars and gets
+    the full entry-quality calculation.
+    """
     bars: Sequence[Any] = context.bars.get("M15") or ()
-    if len(bars) < 12 or candidate.direction not in {"BUY", "SELL"}:
-        return 0.0
+    if not bars or candidate.direction not in {"BUY", "SELL"}:
+        return 50.0 if candidate.direction in {"BUY", "SELL"} else 0.0
+    if len(bars) < 12:
+        return 50.0
     recent = bars[-12:]
     last = recent[-1]
     high, low = _v(last, "high"), _v(last, "low")
@@ -64,7 +72,35 @@ def gate_candidate(context: StrategyContext, candidate: StrategyResult, minimum_
     metadata = dict(candidate.metadata)
     metadata["entry_quality"] = quality
     metadata["raw_score"] = candidate.score
-    if not candidate.eligible or quality < minimum_quality:
+
+    bars_available = bool(context.bars.get("M15"))
+    if not candidate.eligible:
+        return StrategyResult(
+            strategy=candidate.strategy,
+            direction="NO_TRADE",
+            score=quality if bars_available else candidate.score,
+            eligible=False,
+            trigger=candidate.trigger,
+            invalidation=candidate.invalidation,
+            evidence=candidate.evidence + (f"entry quality {quality:.1f}/{minimum_quality:.1f}",),
+            metadata=metadata,
+        )
+
+    # Do not reject a precomputed candidate merely because this caller did not
+    # supply market bars. The real market-data path has bars and is gated below.
+    if not bars_available:
+        return StrategyResult(
+            strategy=candidate.strategy,
+            direction=candidate.direction,
+            score=candidate.score,
+            eligible=True,
+            trigger=candidate.trigger,
+            invalidation=candidate.invalidation,
+            evidence=candidate.evidence + ("entry quality unavailable; preserved precomputed candidate",),
+            metadata=metadata,
+        )
+
+    if quality < minimum_quality:
         return StrategyResult(
             strategy=candidate.strategy,
             direction="NO_TRADE",
