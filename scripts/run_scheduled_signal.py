@@ -7,7 +7,7 @@ from forex_intelligence.risk import SymbolSpec
 from forex_intelligence.signal_pipeline import SignalPipeline
 from forex_intelligence.telegram import TelegramNotifier
 
-DEFAULT_SYMBOLS = ("EURUSD", "GBPUSD", "USDJPY", "EURJPY", "XAUUSD")
+DEFAULT_SYMBOLS = ("EURUSD", "USDCHF", "AUDUSD", "USDCAD", "NZDUSD", "XAUUSD")
 
 
 def _env_float(name: str, default: float | None = None) -> float:
