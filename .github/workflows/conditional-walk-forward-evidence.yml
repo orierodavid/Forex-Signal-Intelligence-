@@ -29,4 +29,14 @@ jobs:
         env:
           MARKET_DATA_API_KEY: ${{ secrets.TWELVE_DATA_API_KEY }}
           PYTHONPATH: src
-        run: python scripts/run_conditional_walk_forward_evidence.py
+        run: |
+          set -o pipefail
+          python scripts/run_conditional_walk_forward_evidence.py | tee conditional_walk_forward_evidence.txt
+
+      - name: Upload evidence report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: conditional-walk-forward-evidence
+          path: conditional_walk_forward_evidence.txt
+          if-no-files-found: ignore
