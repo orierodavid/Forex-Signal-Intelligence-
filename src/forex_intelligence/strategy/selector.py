@@ -60,7 +60,7 @@ class StrategySelector:
             StrategyResult(
                 strategy=candidate.strategy,
                 direction=candidate.direction,
-                score=min(100.0, candidate.score + self._alignment_bonus(candidate, context)) if candidate.eligible else candidate.score,
+                score=(candidate.score if not context.bars.get("M15") else min(100.0, candidate.score + self._alignment_bonus(candidate, context))) if candidate.eligible else candidate.score,
                 eligible=candidate.eligible,
                 trigger=candidate.trigger,
                 invalidation=candidate.invalidation,
