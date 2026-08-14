@@ -20,7 +20,7 @@ class StrategySelection:
 
 
 class StrategySelector:
-    """Select the best M15 strategy only after an independent entry-quality gate."""
+    """Select the best M15 strategy after entry-quality and directional gates."""
 
     def __init__(self, strategies: Iterable[Strategy] = DEFAULT_STRATEGIES, minimum_score: float = 70.0, minimum_entry_quality: float = 55.0) -> None:
         if not 0 <= minimum_score <= 100:
@@ -55,9 +55,6 @@ class StrategySelector:
         return bonus
 
     def evaluate(self, context: StrategyContext) -> StrategySelection:
-        # Entry quality may adjust live candidates, but precomputed candidates
-        # must retain their raw score so the 70-point threshold cannot be
-        # crossed merely because of H1/H4 alignment.
         gated = tuple(gate_candidate(context, strategy.evaluate(context), self.minimum_entry_quality) for strategy in self.strategies)
         candidates = tuple(
             StrategyResult(
@@ -83,19 +80,22 @@ class StrategySelector:
         if not eligible_pairs:
             return StrategySelection(None, candidates, self.minimum_score)
 
-        ranked = sorted(
-            eligible_pairs,
-            key=lambda candidate: (-(candidate.score + self._alignment_bonus(candidate, context)), candidate.strategy),
-        )
-        winner = ranked[0]
-        winner_score = min(100.0, winner.score + self._alignment_bonus(winner, context))
+        # In a neutral/range M15 regime, do not let H1/H4 alignment create an
+        # artificial directional edge. Close opposing raw scores are a NO_TRADE.
+        if primary_direction is None:
+            by_score = sorted(eligible_pairs, key=lambda candidate: (-candidate.score, candidate.strategy))
+            if len(by_score) > 1 and by_score[0].direction != by_score[1].direction:
+                if by_score[0].score - by_score[1].score < 5.0:
+                    return StrategySelection(None, candidates, self.minimum_score)
+            winner = by_score[0]
+        else:
+            ranked = sorted(
+                eligible_pairs,
+                key=lambda candidate: (-(candidate.score + self._alignment_bonus(candidate, context)), candidate.strategy),
+            )
+            winner = ranked[0]
 
-        opposing = [candidate for candidate in ranked[1:] if candidate.direction != winner.direction]
-        if primary_direction is None and opposing:
-            opposing_score = opposing[0].score + self._alignment_bonus(opposing[0], context)
-            if winner_score - opposing_score < 5.0:
-                return StrategySelection(None, candidates, self.minimum_score)
-
+        winner_score = min(100.0, winner.score + (self._alignment_bonus(winner, context) if primary_direction is not None else 0.0))
         selected = StrategyResult(
             strategy=winner.strategy,
             direction=winner.direction,
