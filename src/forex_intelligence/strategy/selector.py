@@ -1,9 +1,10 @@
 from __future__ import annotations
 
-from dataclasses import dataclass, replace
+from dataclasses import dataclass
 from typing import Iterable
 
 from .base import Strategy, StrategyContext, StrategyResult
+from .entry_quality import gate_candidate
 from .strategies import DEFAULT_STRATEGIES
 
 
@@ -19,26 +20,16 @@ class StrategySelection:
 
 
 class StrategySelector:
-    """Select the single best strategy for an M15 trading decision.
+    """Select the best M15 strategy only after an independent entry-quality gate."""
 
-    M15 is the primary decision timeframe. H1 and H4 are confirmation layers
-    that can strengthen the ranking of an M15 setup, but they do not replace
-    the M15 market direction.
-
-    70/100 is now the Telegram alert floor. Scores from 70 through 74 are
-    intentionally surfaced as early signals but remain outside the risk-vetted
-    trading gate. A score of 75 or higher is eligible for normal risk vetting.
-
-    When M15 is clearly directional, strategies fighting that M15 direction
-    are not eligible for selection. This prevents a higher-scoring opposing
-    strategy from winning solely because its raw score is numerically larger.
-    """
-
-    def __init__(self, strategies: Iterable[Strategy] = DEFAULT_STRATEGIES, minimum_score: float = 70.0) -> None:
+    def __init__(self, strategies: Iterable[Strategy] = DEFAULT_STRATEGIES, minimum_score: float = 70.0, minimum_entry_quality: float = 55.0) -> None:
         if not 0 <= minimum_score <= 100:
             raise ValueError("minimum_score must be between 0 and 100")
+        if not 0 <= minimum_entry_quality <= 100:
+            raise ValueError("minimum_entry_quality must be between 0 and 100")
         self.strategies = tuple(strategies)
         self.minimum_score = minimum_score
+        self.minimum_entry_quality = minimum_entry_quality
 
     @staticmethod
     def _primary_direction(context: StrategyContext) -> str | None:
@@ -56,9 +47,7 @@ class StrategySelector:
         bonus = 0.0
         h4 = context.regimes.get("H4", "")
         h1 = context.regimes.get("H1", context.regime)
-        bullish = {"STRONG_TREND_UP", "TREND_UP"}
-        bearish = {"STRONG_TREND_DOWN", "TREND_DOWN"}
-        aligned = bullish if candidate.direction == "BUY" else bearish
+        aligned = {"STRONG_TREND_UP", "TREND_UP"} if candidate.direction == "BUY" else {"STRONG_TREND_DOWN", "TREND_DOWN"}
         if h4 in aligned:
             bonus += 3.0
         if h1 in aligned:
@@ -66,34 +55,34 @@ class StrategySelector:
         return bonus
 
     def evaluate(self, context: StrategyContext) -> StrategySelection:
-        raw_candidates = tuple(strategy.evaluate(context) for strategy in self.strategies)
+        gated = tuple(gate_candidate(context, strategy.evaluate(context), self.minimum_entry_quality) for strategy in self.strategies)
         candidates = tuple(
-            replace(candidate, score=min(100.0, candidate.score + self._alignment_bonus(candidate, context)))
-            for candidate in raw_candidates
+            StrategyResult(
+                strategy=candidate.strategy,
+                direction=candidate.direction,
+                score=min(100.0, candidate.score + self._alignment_bonus(candidate, context)) if candidate.eligible else candidate.score,
+                eligible=candidate.eligible,
+                trigger=candidate.trigger,
+                invalidation=candidate.invalidation,
+                evidence=candidate.evidence,
+                metadata=candidate.metadata,
+            )
+            for candidate in gated
         )
 
         primary_direction = self._primary_direction(context)
         eligible_pairs = [
-            (raw, ranked)
-            for raw, ranked in zip(raw_candidates, candidates)
-            if raw.eligible
-            and raw.score >= self.minimum_score
-            and (primary_direction is None or raw.direction == primary_direction)
+            candidate for candidate in candidates
+            if candidate.eligible
+            and candidate.score >= self.minimum_score
+            and (primary_direction is None or candidate.direction == primary_direction)
         ]
         if not eligible_pairs:
             return StrategySelection(None, candidates, self.minimum_score)
 
-        eligible_pairs.sort(key=lambda pair: (-pair[1].score, pair[1].strategy))
-        winner_raw, winner = eligible_pairs[0]
-
-        opposing = [
-            (raw, ranked)
-            for raw, ranked in eligible_pairs[1:]
-            if ranked.direction != winner.direction
-        ]
-        # In neutral M15 regimes, use raw strategy scores for ambiguity. H1/H4
-        # bonuses are confluence evidence, not evidence that should manufacture
-        # a decisive edge over a genuinely competing opposing setup.
-        if primary_direction is None and opposing and winner_raw.score - opposing[0][0].score < 5.0:
+        eligible_pairs.sort(key=lambda candidate: (-candidate.score, candidate.strategy))
+        winner = eligible_pairs[0]
+        opposing = [candidate for candidate in eligible_pairs[1:] if candidate.direction != winner.direction]
+        if primary_direction is None and opposing and winner.score - opposing[0].score < 5.0:
             return StrategySelection(None, candidates, self.minimum_score)
         return StrategySelection(winner, candidates, self.minimum_score)
