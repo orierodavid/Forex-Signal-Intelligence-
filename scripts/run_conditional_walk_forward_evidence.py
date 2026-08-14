@@ -1,8 +1,9 @@
 from __future__ import annotations
 
+import json
 import os
-from dataclasses import dataclass
-from statistics import mean
+from dataclasses import asdict, dataclass
+from statistics import mean, median
 from typing import Sequence
 
 from forex_intelligence.domain import Timeframe
@@ -17,6 +18,13 @@ MIN_TRAIN_TRADES = 30
 TRAIN_BARS = 1000
 TEST_BARS = 250
 STEP_BARS = 250
+MIN_UNSEEN_WINDOWS = 4
+MIN_POSITIVE_WINDOWS = 3
+MIN_STABILITY = 0.75
+MIN_MEDIAN_TEST_EXP_R = 0.10
+MIN_MEDIAN_PF = 1.15
+MAX_DD_R = 12.0
+MIN_TEST_TRADES = 10
 
 
 @dataclass(frozen=True)
@@ -35,6 +43,25 @@ class ConditionalWalkForward:
     test_expectancy_r: float
     test_profit_factor: float
     test_max_drawdown_r: float
+    window_start: int
+
+
+@dataclass(frozen=True)
+class ConditionalEvidenceSummary:
+    pair: str
+    strategy: str
+    regime: str
+    session: str
+    volatility: str
+    reward_risk: float
+    windows: int
+    positive_windows: int
+    stability: float
+    median_test_expectancy_r: float
+    median_test_profit_factor: float
+    max_test_drawdown_r: float
+    total_test_trades: int
+    promoted: bool
 
 
 def _trade_rows(pair: str, bars: Sequence[Bar], start: int, end: int):
@@ -97,26 +124,54 @@ def run_conditional_walk_forward(pair: str, bars: Sequence[Bar]) -> tuple[Condit
             key, outcome = row[:-1], row[-1]
             test_buckets.setdefault(key, []).append(outcome)
 
-        # A condition is promoted only from the preceding training window.
+        # Promotion candidates are derived only from the immediately preceding training window.
         for key, train_values in train_buckets.items():
-            if len(train_values) < MIN_TRAIN_TRADES:
-                continue
-            train_exp = mean(train_values)
-            if train_exp <= 0:
+            if len(train_values) < MIN_TRAIN_TRADES or mean(train_values) <= 0:
                 continue
             test_values = test_buckets.get(key, [])
-            if not test_values:
+            if len(test_values) < MIN_TEST_TRADES:
                 continue
             trades, wins, test_exp, pf, dd = _stats(test_values)
             strategy, regime, session, volatility, rr = key
             reports.append(ConditionalWalkForward(
                 pair=pair, strategy=strategy, regime=regime, session=session,
                 volatility=volatility, reward_risk=rr, train_trades=len(train_values),
-                train_expectancy_r=train_exp, test_trades=trades, test_wins=wins,
+                train_expectancy_r=mean(train_values), test_trades=trades, test_wins=wins,
                 test_net_r=sum(test_values), test_expectancy_r=test_exp,
-                test_profit_factor=pf, test_max_drawdown_r=dd,
+                test_profit_factor=pf, test_max_drawdown_r=dd, window_start=test_start,
             ))
     return tuple(reports)
+
+
+def summarize_evidence(rows: Sequence[ConditionalWalkForward]) -> tuple[ConditionalEvidenceSummary, ...]:
+    buckets = {}
+    for row in rows:
+        key = (row.pair, row.strategy, row.regime, row.session, row.volatility, row.reward_risk)
+        buckets.setdefault(key, []).append(row)
+
+    summaries = []
+    for key, windows in buckets.items():
+        positive = sum(r.test_expectancy_r > 0 and r.test_profit_factor > 1.0 for r in windows)
+        stability = positive / len(windows) if windows else 0.0
+        summary = ConditionalEvidenceSummary(
+            pair=key[0], strategy=key[1], regime=key[2], session=key[3],
+            volatility=key[4], reward_risk=key[5], windows=len(windows),
+            positive_windows=positive, stability=stability,
+            median_test_expectancy_r=median(r.test_expectancy_r for r in windows),
+            median_test_profit_factor=median(r.test_profit_factor for r in windows),
+            max_test_drawdown_r=max(r.test_max_drawdown_r for r in windows),
+            total_test_trades=sum(r.test_trades for r in windows),
+            promoted=(
+                len(windows) >= MIN_UNSEEN_WINDOWS
+                and positive >= MIN_POSITIVE_WINDOWS
+                and stability >= MIN_STABILITY
+                and median(r.test_expectancy_r for r in windows) > MIN_MEDIAN_TEST_EXP_R
+                and median(r.test_profit_factor for r in windows) > MIN_MEDIAN_PF
+                and max(r.test_max_drawdown_r for r in windows) <= MAX_DD_R
+            ),
+        )
+        summaries.append(summary)
+    return tuple(sorted(summaries, key=lambda r: (-r.median_test_expectancy_r, -r.total_test_trades)))
 
 
 def main() -> None:
@@ -124,6 +179,7 @@ def main() -> None:
     if not api_key:
         raise SystemExit("MARKET_DATA_API_KEY is required")
     provider = TwelveDataMarketDataProvider(api_key=api_key, daily_budget=720)
+    all_summaries = []
     print("CONDITIONAL WALK-FORWARD EVIDENCE | M15 primary | H1/H4 confirmation | train-only promotion")
     for pair in PAIRS:
         snapshot = provider.snapshot(pair, Timeframe.M15, count=5000)
@@ -131,16 +187,21 @@ def main() -> None:
             print(f"{pair} | UNAVAILABLE | {snapshot.error}")
             continue
         rows = run_conditional_walk_forward(pair, snapshot.bars)
-        positive = [r for r in rows if r.test_trades >= 10 and r.test_expectancy_r > 0 and r.test_profit_factor > 1.0]
-        positive.sort(key=lambda r: (-r.test_expectancy_r, -r.test_trades))
-        print(f"{pair} | promoted_conditions={len(rows)} | positive_unseen_tests={len(positive)}")
-        for r in positive[:12]:
+        summaries = summarize_evidence(rows)
+        all_summaries.extend(summaries)
+        promoted = [r for r in summaries if r.promoted]
+        positive = [r for r in summaries if r.positive_windows >= 1 and r.median_test_expectancy_r > 0 and r.median_test_profit_factor > 1.0]
+        print(f"{pair} | windows={len({r.window_start for r in rows})} | conditions={len(summaries)} | promoted={len(promoted)} | positive={len(positive)}")
+        for r in promoted[:12]:
             print(
-                f"{pair} | {r.strategy} | regime={r.regime} session={r.session} vol={r.volatility} "
-                f"RR={r.reward_risk:g} train={r.train_trades} trainExpR={r.train_expectancy_r:.3f} "
-                f"test={r.test_trades} win={r.test_wins / r.test_trades * 100:.2f}% "
-                f"testExpR={r.test_expectancy_r:.3f} PF={r.test_profit_factor:.2f} DD={r.test_max_drawdown_r:.2f}"
+                f"{pair} | PROMOTE | {r.strategy} | regime={r.regime} session={r.session} vol={r.volatility} "
+                f"RR={r.reward_risk:g} windows={r.windows} positive={r.positive_windows} stability={r.stability:.2f} "
+                f"medianExpR={r.median_test_expectancy_r:.3f} medianPF={r.median_test_profit_factor:.2f} "
+                f"maxDD={r.max_test_drawdown_r:.2f} trades={r.total_test_trades}"
             )
+    with open("conditional_walk_forward_registry.json", "w", encoding="utf-8") as fh:
+        json.dump([asdict(r) for r in all_summaries], fh, indent=2, sort_keys=True)
+    print(f"Registry written: conditional_walk_forward_registry.json | promoted={sum(r.promoted for r in all_summaries)}")
     print(f"Twelve Data calls used: {provider.daily_calls_used}; remaining: {provider.daily_calls_remaining}")
 
 
