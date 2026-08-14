@@ -1,10 +1,4 @@
-"""Adaptive strategy selection based on market state, setup quality, and expectancy.
-
-This module deliberately separates *strategy suitability* from the legacy 0-100
-candidate score. It is a deterministic production-safe selector: historical
-performance is an optional input and is never allowed to override current
-market structure or create a trade from missing evidence.
-"""
+"""Adaptive strategy selection based on market state, setup quality, and expectancy."""
 
 from __future__ import annotations
 
@@ -48,7 +42,6 @@ class MarketState:
 @dataclass(frozen=True)
 class HistoricalEdge:
     """Out-of-sample conditional performance for a strategy/state bucket."""
-
     samples: int
     expectancy_r: float
     win_rate: float
@@ -71,34 +64,16 @@ class AdaptiveCandidate:
 
     @property
     def suitability(self) -> float:
-        """Current-state strategy suitability, independent of trade score."""
-        return self._clamp(
-            0.35 * self.setup_quality
-            + 0.25 * self.entry_quality
-            + 0.20 * self.risk_reward_quality
-            + 0.20 * self._historical_quality()
-        )
+        return self._clamp(0.35 * self.setup_quality + 0.25 * self.entry_quality + 0.20 * self.risk_reward_quality + 0.20 * self._historical_quality())
 
     @property
     def composite_score(self) -> float:
-        """Decision score used for ranking eligible candidates."""
-        # Base score remains visible for compatibility, but current entry and
-        # conditional evidence have material weight so a stale high score cannot
-        # win on its own.
-        return self._clamp(
-            0.40 * self.base_score
-            + 0.20 * self.setup_quality
-            + 0.15 * self.entry_quality
-            + 0.10 * self.risk_reward_quality
-            + 0.15 * self._historical_quality()
-        )
+        return self._clamp(0.40 * self.base_score + 0.20 * self.setup_quality + 0.15 * self.entry_quality + 0.10 * self.risk_reward_quality + 0.15 * self._historical_quality())
 
     def _historical_quality(self) -> float:
         if not self.historical_edge or self.historical_edge.samples < 30:
             return 50.0
-        expectancy = self.historical_edge.expectancy_r
-        # Map a useful but deliberately conservative expectancy range to 0-100.
-        quality = 50.0 + expectancy * 50.0
+        quality = 50.0 + self.historical_edge.expectancy_r * 50.0
         if self.historical_edge.profit_factor is not None:
             quality += (self.historical_edge.profit_factor - 1.0) * 10.0
         return self._clamp(quality)
@@ -133,20 +108,13 @@ REGIME_FAMILIES: dict[Regime, frozenset[str]] = {
 
 
 class AdaptiveStrategySelector:
-    """Select the best current setup without forcing a trade."""
-
     def __init__(self, minimum_score: float = 70.0, qualified_score: float = 75.0):
         self.minimum_score = minimum_score
         self.qualified_score = qualified_score
 
-    def evaluate(
-        self,
-        state: MarketState,
-        candidates: Sequence[AdaptiveCandidate],
-    ) -> Selection:
+    def evaluate(self, state: MarketState, candidates: Sequence[AdaptiveCandidate]) -> Selection:
         if state.regime is Regime.UNTRADEABLE:
             return Selection(None, "NO_TRADE", reason="market is untradeable")
-
         allowed = REGIME_FAMILIES.get(state.regime, frozenset())
         if not allowed:
             return Selection(None, "NO_TRADE", reason="no strategy family is compatible with regime")
@@ -158,9 +126,8 @@ class AdaptiveStrategySelector:
                 continue
             if candidate.base_score < self.minimum_score:
                 continue
-            if candidate.invalidation.lower() in {"invalidated", "invalid"}:
-                continue
-            # Current M15 direction is a gate, not a minor scoring factor.
+            # `invalidation` describes the future condition/price that invalidates
+            # a setup. It is not a current eligibility flag.
             if alignment > 0.60 and candidate.direction is not Direction.BUY:
                 continue
             if alignment < -0.60 and candidate.direction is not Direction.SELL:
@@ -172,36 +139,18 @@ class AdaptiveStrategySelector:
         if not eligible:
             return Selection(None, "NO_TRADE", reason="no regime-compatible candidate passed gates")
 
-        ranked = sorted(
-            eligible,
-            key=lambda c: (c.composite_score, c.suitability, c.setup_quality, c.entry_quality),
-            reverse=True,
-        )
+        ranked = sorted(eligible, key=lambda c: (c.composite_score, c.suitability, c.setup_quality, c.entry_quality), reverse=True)
         best = ranked[0]
-
-        # Do not manufacture certainty when opposing candidates are close.
         if len(ranked) > 1:
             second = ranked[1]
             if second.direction is not best.direction and best.composite_score - second.composite_score < 5.0:
-                return Selection(
-                    None,
-                    "NO_TRADE",
-                    reason="opposing candidates are too close",
-                    eligible_candidates=tuple(ranked),
-                )
+                return Selection(None, "NO_TRADE", reason="opposing candidates are too close", eligible_candidates=tuple(ranked))
 
         status = "QUALIFIED" if best.composite_score >= self.qualified_score else "RISK_NOT_VETTED"
-        return Selection(
-            best,
-            status,
-            score=best.composite_score,
-            reason="best regime-compatible candidate",
-            eligible_candidates=tuple(ranked),
-        )
+        return Selection(best, status, score=best.composite_score, reason="best regime-compatible candidate", eligible_candidates=tuple(ranked))
 
     @staticmethod
     def _directional_alignment(state: MarketState) -> float:
-        # H1/H4 strengthen M15; they do not replace it.
         m15 = 1.0 if state.regime in {Regime.TREND_UP, Regime.STRONG_TREND_UP} else -1.0 if state.regime in {Regime.TREND_DOWN, Regime.STRONG_TREND_DOWN} else 0.0
         h1 = 1.0 if state.h1_regime in {Regime.TREND_UP, Regime.STRONG_TREND_UP} else -1.0 if state.h1_regime in {Regime.TREND_DOWN, Regime.STRONG_TREND_DOWN} else 0.0
         h4 = 1.0 if state.h4_regime in {Regime.TREND_UP, Regime.STRONG_TREND_UP} else -1.0 if state.h4_regime in {Regime.TREND_DOWN, Regime.STRONG_TREND_DOWN} else 0.0
