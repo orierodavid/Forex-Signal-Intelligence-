@@ -25,6 +25,9 @@ MIN_MEDIAN_TEST_EXP_R = 0.10
 MIN_MEDIAN_PF = 1.15
 MAX_DD_R = 12.0
 MIN_TEST_TRADES = 10
+MIN_TOTAL_TEST_TRADES = 60
+MIN_TOTAL_TEST_NET_R = 5.0
+MAX_NEGATIVE_WINDOWS = 1
 
 
 @dataclass(frozen=True)
@@ -56,11 +59,13 @@ class ConditionalEvidenceSummary:
     reward_risk: float
     windows: int
     positive_windows: int
+    negative_windows: int
     stability: float
     median_test_expectancy_r: float
     median_test_profit_factor: float
     max_test_drawdown_r: float
     total_test_trades: int
+    total_test_net_r: float
     promoted: bool
 
 
@@ -124,7 +129,7 @@ def run_conditional_walk_forward(pair: str, bars: Sequence[Bar]) -> tuple[Condit
             key, outcome = row[:-1], row[-1]
             test_buckets.setdefault(key, []).append(outcome)
 
-        # Promotion candidates are derived only from the immediately preceding training window.
+        # Candidates are discovered strictly from the immediately preceding training window.
         for key, train_values in train_buckets.items():
             if len(train_values) < MIN_TRAIN_TRADES or mean(train_values) <= 0:
                 continue
@@ -152,25 +157,32 @@ def summarize_evidence(rows: Sequence[ConditionalWalkForward]) -> tuple[Conditio
     summaries = []
     for key, windows in buckets.items():
         positive = sum(r.test_expectancy_r > 0 and r.test_profit_factor > 1.0 for r in windows)
+        negative = sum(r.test_expectancy_r <= 0 or r.test_profit_factor <= 1.0 for r in windows)
         stability = positive / len(windows) if windows else 0.0
-        summary = ConditionalEvidenceSummary(
+        median_exp = median(r.test_expectancy_r for r in windows)
+        median_pf = median(r.test_profit_factor for r in windows)
+        total_trades = sum(r.test_trades for r in windows)
+        total_net_r = sum(r.test_net_r for r in windows)
+        max_dd = max(r.test_max_drawdown_r for r in windows)
+        promoted = (
+            len(windows) >= MIN_UNSEEN_WINDOWS
+            and positive >= MIN_POSITIVE_WINDOWS
+            and negative <= MAX_NEGATIVE_WINDOWS
+            and stability >= MIN_STABILITY
+            and median_exp > MIN_MEDIAN_TEST_EXP_R
+            and median_pf > MIN_MEDIAN_PF
+            and max_dd <= MAX_DD_R
+            and total_trades >= MIN_TOTAL_TEST_TRADES
+            and total_net_r >= MIN_TOTAL_TEST_NET_R
+        )
+        summaries.append(ConditionalEvidenceSummary(
             pair=key[0], strategy=key[1], regime=key[2], session=key[3],
             volatility=key[4], reward_risk=key[5], windows=len(windows),
-            positive_windows=positive, stability=stability,
-            median_test_expectancy_r=median(r.test_expectancy_r for r in windows),
-            median_test_profit_factor=median(r.test_profit_factor for r in windows),
-            max_test_drawdown_r=max(r.test_max_drawdown_r for r in windows),
-            total_test_trades=sum(r.test_trades for r in windows),
-            promoted=(
-                len(windows) >= MIN_UNSEEN_WINDOWS
-                and positive >= MIN_POSITIVE_WINDOWS
-                and stability >= MIN_STABILITY
-                and median(r.test_expectancy_r for r in windows) > MIN_MEDIAN_TEST_EXP_R
-                and median(r.test_profit_factor for r in windows) > MIN_MEDIAN_PF
-                and max(r.test_max_drawdown_r for r in windows) <= MAX_DD_R
-            ),
-        )
-        summaries.append(summary)
+            positive_windows=positive, negative_windows=negative, stability=stability,
+            median_test_expectancy_r=median_exp, median_test_profit_factor=median_pf,
+            max_test_drawdown_r=max_dd, total_test_trades=total_trades,
+            total_test_net_r=total_net_r, promoted=promoted,
+        ))
     return tuple(sorted(summaries, key=lambda r: (-r.median_test_expectancy_r, -r.total_test_trades)))
 
 
@@ -197,7 +209,7 @@ def main() -> None:
                 f"{pair} | PROMOTE | {r.strategy} | regime={r.regime} session={r.session} vol={r.volatility} "
                 f"RR={r.reward_risk:g} windows={r.windows} positive={r.positive_windows} stability={r.stability:.2f} "
                 f"medianExpR={r.median_test_expectancy_r:.3f} medianPF={r.median_test_profit_factor:.2f} "
-                f"maxDD={r.max_test_drawdown_r:.2f} trades={r.total_test_trades}"
+                f"maxDD={r.max_test_drawdown_r:.2f} trades={r.total_test_trades} netR={r.total_test_net_r:.2f}"
             )
     with open("conditional_walk_forward_registry.json", "w", encoding="utf-8") as fh:
         json.dump([asdict(r) for r in all_summaries], fh, indent=2, sort_keys=True)
