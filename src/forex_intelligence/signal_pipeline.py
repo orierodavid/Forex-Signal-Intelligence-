@@ -17,6 +17,40 @@ class SnapshotProvider(Protocol):
     def snapshot(self, symbol: str, timeframe: Timeframe, count: int = 300) -> MarketSnapshot: ...
 
 
+MIN_EXECUTION_WINDOW_MINUTES = 30
+FX_WEEKLY_OPEN_UTC_HOUR = 21
+FX_WEEKLY_CLOSE_UTC_HOUR = 21
+
+
+def _fx_market_is_open(now: datetime) -> bool:
+    """Conservative weekly FX session gate in UTC.
+
+    The broker remains the final execution authority. This gate prevents the
+    Telegram signal path from producing actionable alerts during the normal
+    weekend closure and during the final execution-window cutoff on Friday.
+    """
+    now = now.astimezone(timezone.utc)
+    weekday = now.weekday()  # Monday=0 ... Friday=4, Saturday=5, Sunday=6
+    hour = now.hour + now.minute / 60 + now.second / 3600
+
+    if weekday == 5:  # Saturday
+        return False
+    if weekday == 6:  # Sunday, before the weekly open
+        return hour >= FX_WEEKLY_OPEN_UTC_HOUR
+    if weekday == 4:  # Friday, stop sending before the weekly close
+        return hour < FX_WEEKLY_CLOSE_UTC_HOUR - MIN_EXECUTION_WINDOW_MINUTES / 60
+    return True
+
+
+def _fx_minutes_until_close(now: datetime) -> float | None:
+    """Return minutes until the conservative Friday weekly close."""
+    now = now.astimezone(timezone.utc)
+    if now.weekday() != 4:
+        return None
+    close = now.replace(hour=FX_WEEKLY_CLOSE_UTC_HOUR, minute=0, second=0, microsecond=0)
+    return max(0.0, (close - now).total_seconds() / 60.0)
+
+
 class SignalPipeline:
     """Runs the read-only analysis path and optionally emits a Telegram alert.
 
@@ -76,6 +110,16 @@ class SignalPipeline:
         now: datetime | None = None,
     ) -> tuple[Signal | None, PositionSize | None]:
         now = now or datetime.now(timezone.utc)
+
+        # Never emit actionable Telegram signals while the normal weekly FX
+        # market is closed or too close to the Friday close to provide the
+        # minimum execution window. The broker remains the final authority.
+        if not _fx_market_is_open(now):
+            return None, None
+        minutes_to_close = _fx_minutes_until_close(now)
+        if minutes_to_close is not None and minutes_to_close < MIN_EXECUTION_WINDOW_MINUTES:
+            return None, None
+
         snapshots = {
             timeframe: self.provider.snapshot(pair, timeframe, 300)
             for timeframe in (Timeframe.H4, Timeframe.H1, Timeframe.M15)
@@ -108,7 +152,6 @@ class SignalPipeline:
                 return None, None
             stop_loss, take_profit = levels
             direction = Direction.BUY if candidate.direction == "BUY" else Direction.SELL
-            stop_distance = abs(current_price - stop_loss)
             return Signal(
                 signal_id=uuid4(),
                 pair=pair,
@@ -124,7 +167,7 @@ class SignalPipeline:
                 confidence=min(100.0, m15_assessment.confidence),
                 trigger="score threshold reached",
                 invalidation="risk vetting required",
-                expiry=now + timedelta(minutes=15),
+                expiry=now + timedelta(minutes=MIN_EXECUTION_WINDOW_MINUTES),
                 timeframes=(Timeframe.M15, Timeframe.H1, Timeframe.H4),
                 evidence=tuple(Evidence(e, 1.0, 1.0, "analysis") for e in candidate.evidence),
                 timestamp=now,
