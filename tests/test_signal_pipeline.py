@@ -67,6 +67,8 @@ def test_real_analysis_path_reaches_telegram_without_broker_execution():
             max_volume=100.0,
         ),
         trigger_confirmed=True,
+        # Keep the fixture deterministic and explicitly inside the FX session.
+        now=datetime(2026, 8, 10, 8, 0, tzinfo=timezone.utc),
     )
 
     assert signal is not None
@@ -96,6 +98,31 @@ def test_pipeline_does_not_emit_alert_without_explicit_trigger():
             max_volume=100.0,
         ),
         trigger_confirmed=False,
+        now=datetime(2026, 8, 10, 8, 0, tzinfo=timezone.utc),
+    )
+
+    assert signal is None
+    assert position is None
+    assert transport.calls == []
+
+
+def test_pipeline_suppresses_signals_when_weekly_fx_market_is_closed():
+    transport = FakeTransport()
+    notifier = TelegramNotifier("token", "chat", transport)
+    pipeline = SignalPipeline(FakeProvider(make_bars()), notifier=notifier)
+
+    signal, position = pipeline.evaluate_and_notify(
+        pair="EURUSD",
+        equity=10_000,
+        symbol_spec=SymbolSpec(
+            tick_size=0.00001,
+            tick_value=1.0,
+            volume_step=0.01,
+            min_volume=0.01,
+            max_volume=100.0,
+        ),
+        trigger_confirmed=True,
+        now=datetime(2026, 8, 15, 10, 0, tzinfo=timezone.utc),
     )
 
     assert signal is None
