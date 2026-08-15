@@ -3,12 +3,15 @@ name: Scheduled Forex Signal
 on:
   workflow_dispatch:
   schedule:
-    - cron: "*/15 * * * *"
+    # Poll every 5 minutes to compensate for GitHub Actions cron jitter.
+    # The runner itself deduplicates analysis by M15 bar timestamp, so this
+    # does NOT create repeated signals for the same M15 candle.
+    - cron: "*/5 * * * *"
 
 permissions:
   contents: read
 
-# Prevent overlapping scheduled runs from reading/writing the same quota cache.
+# Prevent overlapping scheduled runs from reading/writing the same quota/state cache.
 concurrency:
   group: scheduled-forex-signal
   cancel-in-progress: false
@@ -33,16 +36,18 @@ jobs:
       MIN_VOLUME: ${{ vars.MIN_VOLUME || '0.01' }}
       MAX_VOLUME: ${{ vars.MAX_VOLUME || '100' }}
       TRIGGER_CONFIRMED: "false"
+      SCHEDULER_STATE_PATH: .cache/scheduler_state.json
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Restore Twelve Data cache
+      - name: Restore scheduler state and Twelve Data cache
         uses: actions/cache@v4
         with:
-          path: .cache/twelvedata
-          key: twelvedata-snapshots-${{ github.run_id }}
+          path: .cache
+          key: scheduled-forex-state-${{ github.run_id }}
           restore-keys: |
+            scheduled-forex-state-
             twelvedata-snapshots-
 
       - name: Set up Python
