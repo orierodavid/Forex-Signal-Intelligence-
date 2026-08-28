@@ -30,6 +30,9 @@ class FakeMT5:
     def symbol_info_tick(self, symbol):
         return SimpleNamespace(bid=1.1000, ask=1.1002)
 
+    def order_calc_profit(self, order_type, symbol, volume, price_open, price_close):
+        return -20.0
+
     def order_send(self, request):
         self.last_request = request
         return SimpleNamespace(retcode=self.TRADE_RETCODE_DONE, order=77, position=88, price=request["price"])
