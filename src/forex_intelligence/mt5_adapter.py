@@ -19,7 +19,7 @@ class MT5UnavailableError(RuntimeError):
 
 
 class MT5Adapter:
-    """Thin MT5 terminal adapter. It never decides whether an account is safe to trade."""
+    """Thin MT5 terminal adapter with a broker-side risk fail-safe."""
 
     def __init__(self, config: MT5Config, mt5_module: Any | None = None) -> None:
         self.config = config
@@ -87,6 +87,36 @@ class MT5Adapter:
         tick = self.tick(request.symbol)
         order_type = mt5.ORDER_TYPE_BUY if request.direction == "BUY" else mt5.ORDER_TYPE_SELL
         price = float(tick.ask if request.direction == "BUY" else tick.bid)
+
+        if request.direction == "BUY" and request.stop_loss >= price:
+            return ExecutionResult(False, "BUY stop-loss must be below current ask")
+        if request.direction == "SELL" and request.stop_loss <= price:
+            return ExecutionResult(False, "SELL stop-loss must be above current bid")
+
+        account = mt5.account_info()
+        if account is None:
+            return ExecutionResult(False, f"account_info failed before risk check: {mt5.last_error()}")
+        equity = float(getattr(account, "equity", 0.0))
+        if equity <= 0:
+            return ExecutionResult(False, "account equity is not positive")
+
+        # Use MT5's own contract economics rather than a hard-coded pip/tick
+        # assumption. This catches oversized orders such as 0.21 lots on XAUUSD
+        # when the broker-calculated loss at SL exceeds the 0.5% risk budget.
+        calc = getattr(mt5, "order_calc_profit", None)
+        if not callable(calc):
+            return ExecutionResult(False, "broker risk calculation unavailable; order blocked")
+        estimated_pnl = calc(order_type, request.symbol, request.volume, price, request.stop_loss)
+        if estimated_pnl is None:
+            return ExecutionResult(False, f"broker risk calculation failed: {mt5.last_error()}")
+        estimated_loss = max(0.0, -float(estimated_pnl))
+        max_loss = equity * request.max_risk_fraction
+        if estimated_loss > max_loss + 1e-9:
+            return ExecutionResult(
+                False,
+                f"risk cap blocked order: estimated SL loss ${estimated_loss:.2f} > max ${max_loss:.2f}",
+            )
+
         trade_request = {
             "action": mt5.TRADE_ACTION_DEAL,
             "symbol": request.symbol,
