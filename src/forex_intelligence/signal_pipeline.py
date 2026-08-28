@@ -21,29 +21,28 @@ MIN_EXECUTION_WINDOW_MINUTES = 30
 FX_WEEKLY_OPEN_UTC_HOUR = 21
 FX_WEEKLY_CLOSE_UTC_HOUR = 21
 
+# Approval is intentionally conservative. A score is only a technical ranking;
+# it is not proof of positive expectancy. Weak candidates are now NO_TRADE.
+MIN_APPROVED_SCORE = 80.0
+MIN_APPROVED_ENTRY_QUALITY = 65.0
+TREND_REGIMES = {"STRONG_TREND_UP", "TREND_UP", "STRONG_TREND_DOWN", "TREND_DOWN"}
+
 
 def _fx_market_is_open(now: datetime) -> bool:
-    """Conservative weekly FX session gate in UTC.
-
-    The broker remains the final execution authority. This gate prevents the
-    Telegram signal path from producing actionable alerts during the normal
-    weekend closure and during the final execution-window cutoff on Friday.
-    """
+    """Conservative weekly FX session gate in UTC."""
     now = now.astimezone(timezone.utc)
-    weekday = now.weekday()  # Monday=0 ... Friday=4, Saturday=5, Sunday=6
+    weekday = now.weekday()
     hour = now.hour + now.minute / 60 + now.second / 3600
-
-    if weekday == 5:  # Saturday
+    if weekday == 5:
         return False
-    if weekday == 6:  # Sunday, before the weekly open
+    if weekday == 6:
         return hour >= FX_WEEKLY_OPEN_UTC_HOUR
-    if weekday == 4:  # Friday, stop sending before the weekly close
+    if weekday == 4:
         return hour < FX_WEEKLY_CLOSE_UTC_HOUR - MIN_EXECUTION_WINDOW_MINUTES / 60
     return True
 
 
 def _fx_minutes_until_close(now: datetime) -> float | None:
-    """Return minutes until the conservative Friday weekly close."""
     now = now.astimezone(timezone.utc)
     if now.weekday() != 4:
         return None
@@ -51,16 +50,48 @@ def _fx_minutes_until_close(now: datetime) -> float | None:
     return max(0.0, (close - now).total_seconds() / 60.0)
 
 
+def _direction_regime(direction: str) -> set[str]:
+    return {"STRONG_TREND_UP", "TREND_UP"} if direction == "BUY" else {"STRONG_TREND_DOWN", "TREND_DOWN"}
+
+
+def _passes_approval_gate(candidate: object, context: StrategyContext) -> bool:
+    """Final technical gate before a candidate may become an approved trade.
+
+    This deliberately rejects the former 70-79 score path. For trend trades,
+    both H1 and H4 must agree with the M15 direction; neutral/range setups are
+    not promoted to approved status until historical evidence is wired in.
+    """
+    score = float(getattr(candidate, "score", 0.0))
+    metadata = getattr(candidate, "metadata", {}) or {}
+    entry_quality = float(metadata.get("entry_quality", 0.0))
+    direction = str(getattr(candidate, "direction", "NO_TRADE"))
+    regime = context.regimes.get("M15", context.regime)
+
+    if direction not in {"BUY", "SELL"}:
+        return False
+    if score < MIN_APPROVED_SCORE:
+        return False
+    if entry_quality < MIN_APPROVED_ENTRY_QUALITY:
+        return False
+
+    if regime in TREND_REGIMES:
+        aligned = _direction_regime(direction)
+        if context.regimes.get("H1", "") not in aligned:
+            return False
+        if context.regimes.get("H4", "") not in aligned:
+            return False
+    else:
+        # Until conditional walk-forward evidence is supplied to the live
+        # selector, range/transition candidates remain research-only.
+        return False
+    return True
+
+
 class SignalPipeline:
-    """Runs the read-only analysis path and optionally emits a Telegram alert.
+    """Runs analysis and emits only fully approved, risk-sized trade alerts.
 
-    M15 is the primary trading timeframe. H1 and H4 are higher-timeframe
-    confirmation layers used to strengthen or weaken the M15 decision.
-
-    Scores 70-74 are early Telegram alerts only: they deliberately bypass risk
-    sizing/vetting but still receive complete technical entry, stop-loss and
-    take-profit levels. The alert title/status is RISK_NOT_VETTED. Scores 75+
-    continue through the normal trigger and risk-sizing gates.
+    M15 is the primary timeframe; H1 and H4 are mandatory confirmation layers.
+    There is intentionally no RISK_NOT_VETTED production alert path anymore.
     """
 
     def __init__(
@@ -110,10 +141,6 @@ class SignalPipeline:
         now: datetime | None = None,
     ) -> tuple[Signal | None, PositionSize | None]:
         now = now or datetime.now(timezone.utc)
-
-        # Never emit actionable Telegram signals while the normal weekly FX
-        # market is closed or too close to the Friday close to provide the
-        # minimum execution window. The broker remains the final authority.
         if not _fx_market_is_open(now):
             return None, None
         minutes_to_close = _fx_minutes_until_close(now)
@@ -125,7 +152,6 @@ class SignalPipeline:
             for timeframe in (Timeframe.H4, Timeframe.H1, Timeframe.M15)
         }
         assessments = {tf: self.regime_engine.assess(snapshot) for tf, snapshot in snapshots.items()}
-
         m15 = snapshots[Timeframe.M15]
         m15_assessment = assessments[Timeframe.M15]
         if m15_assessment.regime == MarketRegime.UNTRADEABLE:
@@ -143,36 +169,8 @@ class SignalPipeline:
         )
         selection = self.strategy_selector.evaluate(context)
         candidate = selection.selected
-        if candidate is None:
+        if candidate is None or not _passes_approval_gate(candidate, context):
             return None, None
-
-        if 70.0 <= candidate.score < 75.0:
-            levels = self._technical_levels(m15, candidate.direction, current_price)
-            if levels is None:
-                return None, None
-            stop_loss, take_profit = levels
-            direction = Direction.BUY if candidate.direction == "BUY" else Direction.SELL
-            return Signal(
-                signal_id=uuid4(),
-                pair=pair,
-                direction=direction,
-                strategy=candidate.strategy,
-                market_regime=m15_assessment.regime,
-                current_price=current_price,
-                entry=current_price,
-                stop_loss=stop_loss,
-                take_profit=take_profit,
-                risk_reward=2.0,
-                score=candidate.score,
-                confidence=min(100.0, m15_assessment.confidence),
-                trigger="score threshold reached",
-                invalidation="risk vetting required",
-                expiry=now + timedelta(minutes=MIN_EXECUTION_WINDOW_MINUTES),
-                timeframes=(Timeframe.M15, Timeframe.H1, Timeframe.H4),
-                evidence=tuple(Evidence(e, 1.0, 1.0, "analysis") for e in candidate.evidence),
-                timestamp=now,
-                status=SignalStatus.RISK_NOT_VETTED,
-            ), None
 
         setup = self.anticipation_engine.create_watch(
             setup_id=str(uuid4()),
@@ -230,11 +228,7 @@ class SignalPipeline:
     def evaluate_and_notify(self, **kwargs: object) -> tuple[Signal | None, PositionSize | None]:
         signal, position = self.evaluate(**kwargs)
         if signal is not None and self.notifier is not None:
-            if signal.status is SignalStatus.RISK_NOT_VETTED:
-                risk = "NOT VETTED"
-            elif position is not None:
-                risk = f"0.5% | volume {position.volume:g}"
-            else:
+            if position is None:
                 return signal, position
             values: Mapping[str, object] = {
                 "pair": signal.pair,
@@ -246,7 +240,7 @@ class SignalPipeline:
                 "stop_loss": f"{signal.stop_loss:.8f}",
                 "take_profit": f"{signal.take_profit:.8f}",
                 "risk_reward": f"1:{signal.risk_reward:.2f}",
-                "risk": risk,
+                "risk": f"0.5% | volume {position.volume:g} | max loss ${position.risk_amount:.2f}",
                 "score": int(round(signal.score)),
                 "confidence": f"{signal.confidence:.0f}%",
                 "timeframes": "/".join(tf.value for tf in signal.timeframes),
