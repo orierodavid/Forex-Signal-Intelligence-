@@ -35,6 +35,7 @@ class ExecutionRequest:
     entry: float
     stop_loss: float
     take_profit: float
+    max_risk_fraction: float = 0.005
 
 
 @dataclass(frozen=True)
@@ -75,8 +76,18 @@ class ExecutionGate:
         return True, "demo account verified"
 
     def submit(self, adapter: TradingAdapter, request: ExecutionRequest) -> ExecutionResult:
+        if request.direction not in {"BUY", "SELL"}:
+            return ExecutionResult(False, "invalid execution direction")
+        if request.volume <= 0:
+            return ExecutionResult(False, "execution volume must be positive")
+        if not 0 < request.max_risk_fraction <= 0.005:
+            return ExecutionResult(False, "requested risk fraction exceeds 0.5% hard cap")
+        if request.stop_loss <= 0 or request.take_profit <= 0 or request.entry <= 0:
+            return ExecutionResult(False, "invalid entry/stop/target")
+
         account = adapter.account_info()
         allowed, reason = self.validate_account(account)
         if not allowed:
             return ExecutionResult(accepted=False, reason=reason)
+
         return adapter.submit(request)
