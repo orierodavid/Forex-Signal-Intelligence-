@@ -48,6 +48,21 @@ def make_bars(count=100):
                 quality="SIMULATED",
             )
         )
+
+    # Make the final closed candle a decisive bullish continuation candle.
+    # The strict production gate requires sufficiently strong entry quality;
+    # the original tiny-body fixture scored below that gate by design.
+    last = bars[-1]
+    bars[-1] = Bar(
+        symbol=last.symbol,
+        timeframe=last.timeframe,
+        timestamp=last.timestamp,
+        open=last.close - 0.00015,
+        high=last.close + 0.00001,
+        low=last.close - 0.00015,
+        close=last.close,
+        quality=last.quality,
+    )
     return bars
 
 
@@ -67,7 +82,6 @@ def test_real_analysis_path_reaches_telegram_without_broker_execution():
             max_volume=100.0,
         ),
         trigger_confirmed=True,
-        # Keep the fixture deterministic and explicitly inside the FX session.
         now=datetime(2026, 8, 10, 8, 0, tzinfo=timezone.utc),
     )
 
