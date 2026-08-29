@@ -9,6 +9,9 @@ on:
       - 'src/forex_intelligence/strategy_evidence.py'
       - '.github/workflows/conditional-walk-forward-evidence.yml'
 
+permissions:
+  contents: write
+
 jobs:
   evidence:
     runs-on: ubuntu-latest
@@ -32,6 +35,22 @@ jobs:
         run: |
           set -o pipefail
           python scripts/run_conditional_walk_forward_evidence.py | tee conditional_walk_forward_evidence.txt
+
+      - name: Publish validated strategy profile
+        run: |
+          if [ ! -f strategy_profile.json ]; then
+            echo "strategy_profile.json was not generated"
+            exit 1
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add strategy_profile.json
+          if git diff --cached --quiet; then
+            echo "STRATEGY_PROFILE_UNCHANGED"
+          else
+            git commit -m "chore: publish validated strategy profile"
+            git push origin HEAD:main
+          fi
 
       - name: Upload evidence report
         if: always()
