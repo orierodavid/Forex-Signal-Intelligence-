@@ -1,5 +1,4 @@
-from forex_intelligence.strategy import StrategyContext
-from forex_intelligence.strategy.evidence_selector import EvidenceAwareStrategySelector
+from forex_intelligence.strategy import StrategyContext, StrategyProfile, EvidenceAwareStrategySelector, StrategySelector
 
 
 def bar(open_, high, low, close):
@@ -22,7 +21,8 @@ def test_evidence_selector_preserves_no_trade_when_evidence_is_insufficient():
 
 def test_evidence_selector_records_assessments_for_candidates():
     context = StrategyContext("EURUSD", "TREND_UP", trend_bars(), 1.024)
-    result = EvidenceAwareStrategySelector().evaluate(context)
+    selector = StrategySelector(profile=StrategyProfile({"EURUSD|TREND_UP": "TREND_PULLBACK"}))
+    result = EvidenceAwareStrategySelector(strategy_selector=selector).evaluate(context)
     assert result.evidence
     names = {name for name, _ in result.evidence}
-    assert "TREND_PULLBACK" in names or "MOMENTUM_CONTINUATION" in names
+    assert "TREND_PULLBACK" in names
