@@ -5,6 +5,7 @@ from typing import Iterable
 
 from .base import Strategy, StrategyContext, StrategyResult
 from .entry_quality import gate_candidate
+from .profile import StrategyProfile, load_strategy_profile
 from .strategies import DEFAULT_STRATEGIES
 
 
@@ -20,9 +21,16 @@ class StrategySelection:
 
 
 class StrategySelector:
-    """Select the best M15 strategy after entry-quality and directional gates."""
+    """Select a strategy using current regime plus an optional validated profile.
 
-    def __init__(self, strategies: Iterable[Strategy] = DEFAULT_STRATEGIES, minimum_score: float = 70.0, minimum_entry_quality: float = 55.0) -> None:
+    When a walk-forward profile exists, only the strategy assigned to the
+    current pair/regime is eligible. A missing assignment means NO_TRADE rather
+    than allowing strategy-shopping across the full strategy library.
+    """
+
+    def __init__(self, strategies: Iterable[Strategy] = DEFAULT_STRATEGIES,
+                 minimum_score: float = 70.0, minimum_entry_quality: float = 55.0,
+                 profile: StrategyProfile | None = None) -> None:
         if not 0 <= minimum_score <= 100:
             raise ValueError("minimum_score must be between 0 and 100")
         if not 0 <= minimum_entry_quality <= 100:
@@ -30,6 +38,7 @@ class StrategySelector:
         self.strategies = tuple(strategies)
         self.minimum_score = minimum_score
         self.minimum_entry_quality = minimum_entry_quality
+        self.profile = profile if profile is not None else load_strategy_profile()
 
     @staticmethod
     def _primary_direction(context: StrategyContext) -> str | None:
@@ -54,8 +63,18 @@ class StrategySelector:
             bonus += 2.0
         return bonus
 
+    def _active_strategies(self, context: StrategyContext) -> tuple[Strategy, ...]:
+        if self.profile is None:
+            return self.strategies
+        regime = context.regimes.get("M15", context.regime)
+        assigned = self.profile.strategy_for(context.pair, regime)
+        if not assigned:
+            return ()
+        return tuple(strategy for strategy in self.strategies if strategy.name.upper() == assigned.upper())
+
     def evaluate(self, context: StrategyContext) -> StrategySelection:
-        gated = tuple(gate_candidate(context, strategy.evaluate(context), self.minimum_entry_quality) for strategy in self.strategies)
+        active = self._active_strategies(context)
+        gated = tuple(gate_candidate(context, strategy.evaluate(context), self.minimum_entry_quality) for strategy in active)
         candidates = tuple(
             StrategyResult(
                 strategy=candidate.strategy,
@@ -80,8 +99,6 @@ class StrategySelector:
         if not eligible_pairs:
             return StrategySelection(None, candidates, self.minimum_score)
 
-        # In a neutral/range M15 regime, do not let H1/H4 alignment create an
-        # artificial directional edge. Close opposing raw scores are a NO_TRADE.
         if primary_direction is None:
             by_score = sorted(eligible_pairs, key=lambda candidate: (-candidate.score, candidate.strategy))
             if len(by_score) > 1 and by_score[0].direction != by_score[1].direction:
