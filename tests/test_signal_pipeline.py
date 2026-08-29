@@ -5,6 +5,7 @@ from forex_intelligence.market_data import MarketSnapshot
 from forex_intelligence.market_data.models import Bar
 from forex_intelligence.risk import SymbolSpec
 from forex_intelligence.signal_pipeline import SignalPipeline
+from forex_intelligence.strategy import StrategyProfile, StrategySelector
 from forex_intelligence.telegram import TelegramNotifier
 
 
@@ -13,14 +14,7 @@ class FakeProvider:
         self.bars = bars
 
     def snapshot(self, symbol, timeframe, count=300):
-        return MarketSnapshot(
-            symbol=symbol,
-            timeframe=timeframe,
-            bars=tuple(self.bars),
-            quality="SIMULATED",
-            provider="test-fixture",
-            retrieved_at=datetime.now(timezone.utc),
-        )
+        return MarketSnapshot(symbol=symbol, timeframe=timeframe, bars=tuple(self.bars), quality="SIMULATED", provider="test-fixture", retrieved_at=datetime.now(timezone.utc))
 
 
 class FakeTransport:
@@ -36,54 +30,23 @@ def make_bars(count=100):
     bars = []
     for i in range(count):
         close = 1.1000 + i * 0.0002
-        bars.append(
-            Bar(
-                symbol="EURUSD",
-                timeframe=Timeframe.M15,
-                timestamp=start + timedelta(minutes=15 * i),
-                open=close - 0.00005,
-                high=close + 0.00008,
-                low=close - 0.00008,
-                close=close,
-                quality="SIMULATED",
-            )
-        )
-
-    # Make the final closed candle a decisive bullish continuation candle.
-    # The strict production gate requires sufficiently strong entry quality;
-    # the original tiny-body fixture scored below that gate by design.
+        bars.append(Bar(symbol="EURUSD", timeframe=Timeframe.M15, timestamp=start + timedelta(minutes=15 * i), open=close - 0.00005, high=close + 0.00008, low=close - 0.00008, close=close, quality="SIMULATED"))
     last = bars[-1]
-    bars[-1] = Bar(
-        symbol=last.symbol,
-        timeframe=last.timeframe,
-        timestamp=last.timestamp,
-        open=last.close - 0.00015,
-        high=last.close + 0.00001,
-        low=last.close - 0.00015,
-        close=last.close,
-        quality=last.quality,
-    )
+    bars[-1] = Bar(symbol=last.symbol, timeframe=last.timeframe, timestamp=last.timestamp, open=last.close - 0.00015, high=last.close + 0.00001, low=last.close - 0.00015, close=last.close, quality=last.quality)
     return bars
+
+
+def symbol_spec():
+    return SymbolSpec(tick_size=0.00001, tick_value=1.0, volume_step=0.01, min_volume=0.01, max_volume=100.0)
 
 
 def test_real_analysis_path_reaches_telegram_without_broker_execution():
     transport = FakeTransport()
     notifier = TelegramNotifier("token", "chat", transport)
-    pipeline = SignalPipeline(FakeProvider(make_bars()), notifier=notifier)
+    selector = StrategySelector(profile=StrategyProfile({"EURUSD|TREND_UP": "TREND_PULLBACK", "EURUSD|STRONG_TREND_UP": "TREND_PULLBACK"}))
+    pipeline = SignalPipeline(FakeProvider(make_bars()), strategy_selector=selector, notifier=notifier)
 
-    signal, position = pipeline.evaluate_and_notify(
-        pair="EURUSD",
-        equity=10_000,
-        symbol_spec=SymbolSpec(
-            tick_size=0.00001,
-            tick_value=1.0,
-            volume_step=0.01,
-            min_volume=0.01,
-            max_volume=100.0,
-        ),
-        trigger_confirmed=True,
-        now=datetime(2026, 8, 10, 8, 0, tzinfo=timezone.utc),
-    )
+    signal, position = pipeline.evaluate_and_notify(pair="EURUSD", equity=10_000, symbol_spec=symbol_spec(), trigger_confirmed=True, now=datetime(2026, 8, 10, 8, 0, tzinfo=timezone.utc))
 
     assert signal is not None
     assert signal.direction.value == "BUY"
@@ -99,22 +62,9 @@ def test_real_analysis_path_reaches_telegram_without_broker_execution():
 def test_pipeline_does_not_emit_alert_without_explicit_trigger():
     transport = FakeTransport()
     notifier = TelegramNotifier("token", "chat", transport)
-    pipeline = SignalPipeline(FakeProvider(make_bars()), notifier=notifier)
-
-    signal, position = pipeline.evaluate_and_notify(
-        pair="EURUSD",
-        equity=10_000,
-        symbol_spec=SymbolSpec(
-            tick_size=0.00001,
-            tick_value=1.0,
-            volume_step=0.01,
-            min_volume=0.01,
-            max_volume=100.0,
-        ),
-        trigger_confirmed=False,
-        now=datetime(2026, 8, 10, 8, 0, tzinfo=timezone.utc),
-    )
-
+    selector = StrategySelector(profile=StrategyProfile({"EURUSD|TREND_UP": "TREND_PULLBACK", "EURUSD|STRONG_TREND_UP": "TREND_PULLBACK"}))
+    pipeline = SignalPipeline(FakeProvider(make_bars()), strategy_selector=selector, notifier=notifier)
+    signal, position = pipeline.evaluate_and_notify(pair="EURUSD", equity=10_000, symbol_spec=symbol_spec(), trigger_confirmed=False, now=datetime(2026, 8, 10, 8, 0, tzinfo=timezone.utc))
     assert signal is None
     assert position is None
     assert transport.calls == []
@@ -124,21 +74,7 @@ def test_pipeline_suppresses_signals_when_weekly_fx_market_is_closed():
     transport = FakeTransport()
     notifier = TelegramNotifier("token", "chat", transport)
     pipeline = SignalPipeline(FakeProvider(make_bars()), notifier=notifier)
-
-    signal, position = pipeline.evaluate_and_notify(
-        pair="EURUSD",
-        equity=10_000,
-        symbol_spec=SymbolSpec(
-            tick_size=0.00001,
-            tick_value=1.0,
-            volume_step=0.01,
-            min_volume=0.01,
-            max_volume=100.0,
-        ),
-        trigger_confirmed=True,
-        now=datetime(2026, 8, 15, 10, 0, tzinfo=timezone.utc),
-    )
-
+    signal, position = pipeline.evaluate_and_notify(pair="EURUSD", equity=10_000, symbol_spec=symbol_spec(), trigger_confirmed=True, now=datetime(2026, 8, 15, 10, 0, tzinfo=timezone.utc))
     assert signal is None
     assert position is None
     assert transport.calls == []
