@@ -129,7 +129,6 @@ def run_conditional_walk_forward(pair: str, bars: Sequence[Bar]) -> tuple[Condit
             key, outcome = row[:-1], row[-1]
             test_buckets.setdefault(key, []).append(outcome)
 
-        # Candidates are discovered strictly from the immediately preceding training window.
         for key, train_values in train_buckets.items():
             if len(train_values) < MIN_TRAIN_TRADES or mean(train_values) <= 0:
                 continue
@@ -186,6 +185,45 @@ def summarize_evidence(rows: Sequence[ConditionalWalkForward]) -> tuple[Conditio
     return tuple(sorted(summaries, key=lambda r: (-r.median_test_expectancy_r, -r.total_test_trades)))
 
 
+def build_strategy_profile(summaries: Sequence[ConditionalEvidenceSummary]) -> dict:
+    """Reduce promoted conditional evidence to one robust strategy per pair/regime.
+
+    Session/volatility/RR are research dimensions. Live selection uses pair+regime,
+    so an assignment is emitted only when promoted evidence exists across at least
+    two distinct research conditions and the aggregate OOS edge remains positive.
+    """
+    groups: dict[tuple[str, str, str], list[ConditionalEvidenceSummary]] = {}
+    for row in summaries:
+        if row.promoted:
+            groups.setdefault((row.pair, row.regime, row.strategy), []).append(row)
+
+    candidates = []
+    for (pair, regime, strategy), rows in groups.items():
+        conditions = {(r.session, r.volatility, r.reward_risk) for r in rows}
+        trades = sum(r.total_test_trades for r in rows)
+        weighted_exp = sum(r.median_test_expectancy_r * r.total_test_trades for r in rows) / max(trades, 1)
+        median_pf = median(r.median_test_profit_factor for r in rows)
+        stability = min(r.stability for r in rows)
+        if len(conditions) < 2 or trades < MIN_TOTAL_TEST_TRADES or weighted_exp <= MIN_MEDIAN_TEST_EXP_R or median_pf <= MIN_MEDIAN_PF:
+            continue
+        candidates.append((pair, regime, strategy, weighted_exp, median_pf, stability, trades))
+
+    assignments: dict[str, str] = {}
+    for pair, regime in sorted({(c[0], c[1]) for c in candidates}):
+        options = [c for c in candidates if c[0] == pair and c[1] == regime]
+        winner = max(options, key=lambda c: (c[3], c[4], c[5], c[6], c[2]))
+        assignments[f"{pair}|{regime}"] = winner[2]
+
+    return {
+        "version": 1,
+        "generated_from": "conditional_walk_forward",
+        "min_trades": MIN_TOTAL_TEST_TRADES,
+        "min_expectancy_r": MIN_MEDIAN_TEST_EXP_R,
+        "min_profit_factor": MIN_MEDIAN_PF,
+        "assignments": assignments,
+    }
+
+
 def main() -> None:
     api_key = os.environ.get("MARKET_DATA_API_KEY", "").strip()
     if not api_key:
@@ -211,9 +249,14 @@ def main() -> None:
                 f"medianExpR={r.median_test_expectancy_r:.3f} medianPF={r.median_test_profit_factor:.2f} "
                 f"maxDD={r.max_test_drawdown_r:.2f} trades={r.total_test_trades} netR={r.total_test_net_r:.2f}"
             )
+    registry = [asdict(r) for r in all_summaries]
     with open("conditional_walk_forward_registry.json", "w", encoding="utf-8") as fh:
-        json.dump([asdict(r) for r in all_summaries], fh, indent=2, sort_keys=True)
+        json.dump(registry, fh, indent=2, sort_keys=True)
+    profile = build_strategy_profile(all_summaries)
+    with open("strategy_profile.json", "w", encoding="utf-8") as fh:
+        json.dump(profile, fh, indent=2, sort_keys=True)
     print(f"Registry written: conditional_walk_forward_registry.json | promoted={sum(r.promoted for r in all_summaries)}")
+    print(f"Strategy profile written: strategy_profile.json | assignments={len(profile['assignments'])}")
     print(f"Twelve Data calls used: {provider.daily_calls_used}; remaining: {provider.daily_calls_remaining}")
 
 
