@@ -1,0 +1,8 @@
+{
+  "assignments": {},
+  "generated_from": "conditional_walk_forward",
+  "min_expectancy_r": 0.1,
+  "min_profit_factor": 1.15,
+  "min_trades": 60,
+  "version": 1
+}
