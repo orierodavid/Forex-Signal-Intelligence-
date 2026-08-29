@@ -2,6 +2,7 @@
 
 from .base import Strategy, StrategyContext, StrategyResult
 from .evidence_selector import EvidenceAwareStrategySelector, EvidenceSelection
+from .profile import StrategyProfile, load_strategy_profile
 from .selector import StrategySelector
 from .strategies import (
     BreakoutRetestStrategy,
@@ -20,6 +21,8 @@ __all__ = [
     "StrategySelector",
     "EvidenceAwareStrategySelector",
     "EvidenceSelection",
+    "StrategyProfile",
+    "load_strategy_profile",
     "TrendPullbackStrategy",
     "BreakoutRetestStrategy",
     "LiquiditySweepReversalStrategy",
