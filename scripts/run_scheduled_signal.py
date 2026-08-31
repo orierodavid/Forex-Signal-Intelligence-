@@ -17,8 +17,6 @@ STATE_PATH = Path(os.getenv("SCHEDULER_STATE_PATH", ".cache/scheduler_state.json
 NIGERIA_TZ = ZoneInfo("Africa/Lagos")
 API_START = time(10, 0)
 API_END = time(21, 0)
-# The regime engine requires >=50 M15 bars. Use the same production depth
-# used by the evidence pipeline, with additional headroom for indicators.
 ANALYSIS_BARS = 300
 
 
@@ -59,19 +57,16 @@ def _save_state(state: dict[str, str]) -> None:
 
 
 def _latest_m15_timestamp(provider: TwelveDataMarketDataProvider, symbol: str) -> str:
-    # The timestamp check must itself have enough bars for the provider's
-    # contract. The provider rejects requests below 50 bars, so don't use 2.
     snapshot = provider.snapshot(symbol, Timeframe.M15, ANALYSIS_BARS)
     if not snapshot.bars:
-        raise RuntimeError(f"No M15 bars returned for {symbol}")
+        detail = snapshot.error or "provider returned an empty M15 dataset"
+        raise RuntimeError(f"No M15 bars returned for {symbol}: {detail}")
     return snapshot.bars[-1].timestamp.isoformat()
 
 
 def main() -> int:
     now = datetime.now(timezone.utc)
 
-    # Hard API window: do this before constructing the provider or making any
-    # market-data request. No Twelve Data quota is consumed outside the window.
     if not _api_window_is_open(now):
         local = now.astimezone(NIGERIA_TZ).strftime("%Y-%m-%d %H:%M:%S %Z")
         print(f"OUTSIDE_API_WINDOW: Nigeria={local} | allowed=10:00-21:00")
@@ -104,8 +99,6 @@ def main() -> int:
             print(f"ERROR: {symbol}: {exc}")
             continue
 
-        # Poll every 5 minutes, but evaluate each symbol only once for a newly
-        # observed M15 bar. This compensates for GitHub Actions cron jitter.
         if state.get(symbol) == latest_bar:
             skipped += 1
             print(f"WAIT_M15: {symbol} | bar={latest_bar}")
@@ -133,8 +126,6 @@ def main() -> int:
             print(f"ERROR: {symbol}: {exc}")
             continue
 
-        # Only mark a candle after successful analysis so transient failures
-        # remain retryable on the next poll.
         state[symbol] = latest_bar
         _save_state(state)
 
@@ -148,8 +139,12 @@ def main() -> int:
             f"volume={position.volume if position else 'n/a'}"
         )
 
-    if failures == len(symbols):
-        raise RuntimeError("All configured symbols failed during the scheduled scan")
+    # A partial market-data outage must be visible as a failed workflow rather
+    # than a misleading green run. Successful symbols remain processed, while
+    # failed symbols are retried on the next 10-minute poll because their state
+    # is not advanced.
+    if failures:
+        raise RuntimeError(f"Scheduled scan completed with {failures}/{len(symbols)} symbol failure(s)")
     if skipped == len(symbols):
         print("NO_NEW_M15_BARS")
     return 0
