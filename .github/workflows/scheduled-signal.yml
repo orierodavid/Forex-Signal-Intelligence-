@@ -3,12 +3,9 @@ name: Scheduled Forex Signal
 on:
   workflow_dispatch:
   schedule:
-    # 10-minute polling during the actual Lagos trading/data window.
-    # Offset from minute 00 to reduce GitHub scheduled-event congestion.
-    # 09:07-19:57 UTC = 10:07-20:57 Africa/Lagos, Monday-Friday.
-    # 66 runs/day maximum (~1,980 runs per 30-day month), staying within
-    # the 2,000 GitHub Actions/month budget while still polling every 10 min.
-    - cron: "7,17,27,37,47,57 9-19 * * 1-5"
+    # Every 20 minutes during the Lagos trading/data window.
+    # 30 runs/day maximum, leaving substantial Twelve Data and GitHub Actions headroom.
+    - cron: "7,27,47 9-18 * * 1-5"
 
 permissions:
   contents: read
@@ -33,19 +30,9 @@ jobs:
       MIN_VOLUME: ${{ vars.MIN_VOLUME || '0.01' }}
       MAX_VOLUME: ${{ vars.MAX_VOLUME || '100' }}
       TRIGGER_CONFIRMED: "false"
-      SCHEDULER_STATE_PATH: .cache/scheduler_state.json
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-
-      - name: Restore scheduler state and Twelve Data cache
-        uses: actions/cache@v4
-        with:
-          path: .cache
-          key: scheduled-forex-state-${{ github.run_id }}
-          restore-keys: |
-            scheduled-forex-state-
-            twelvedata-snapshots-
 
       - name: Set up Python
         uses: actions/setup-python@v5
