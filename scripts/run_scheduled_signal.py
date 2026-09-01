@@ -1,23 +1,18 @@
 from __future__ import annotations
 
-import json
 import os
 from datetime import datetime, time, timezone
-from pathlib import Path
 from zoneinfo import ZoneInfo
 
-from forex_intelligence.domain import Timeframe
 from forex_intelligence.market_data import TwelveDataMarketDataProvider
 from forex_intelligence.risk import SymbolSpec
 from forex_intelligence.signal_pipeline import SignalPipeline
 from forex_intelligence.telegram import TelegramNotifier
 
 DEFAULT_SYMBOLS = ("EURUSD", "USDCHF", "AUDUSD", "USDCAD", "NZDUSD", "XAUUSD")
-STATE_PATH = Path(os.getenv("SCHEDULER_STATE_PATH", ".cache/scheduler_state.json"))
 NIGERIA_TZ = ZoneInfo("Africa/Lagos")
 API_START = time(10, 0)
-API_END = time(21, 0)
-ANALYSIS_BARS = 300
+API_END = time(20, 0)
 
 
 def _api_window_is_open(now: datetime) -> bool:
@@ -44,32 +39,12 @@ def _symbols() -> tuple[str, ...]:
     return symbols
 
 
-def _load_state() -> dict[str, str]:
-    try:
-        return json.loads(STATE_PATH.read_text())
-    except (FileNotFoundError, json.JSONDecodeError):
-        return {}
-
-
-def _save_state(state: dict[str, str]) -> None:
-    STATE_PATH.parent.mkdir(parents=True, exist_ok=True)
-    STATE_PATH.write_text(json.dumps(state, indent=2, sort_keys=True) + "\n")
-
-
-def _latest_m15_timestamp(provider: TwelveDataMarketDataProvider, symbol: str) -> str:
-    snapshot = provider.snapshot(symbol, Timeframe.M15, ANALYSIS_BARS)
-    if not snapshot.bars:
-        detail = snapshot.error or "provider returned an empty M15 dataset"
-        raise RuntimeError(f"No M15 bars returned for {symbol}: {detail}")
-    return snapshot.bars[-1].timestamp.isoformat()
-
-
 def main() -> int:
     now = datetime.now(timezone.utc)
 
     if not _api_window_is_open(now):
         local = now.astimezone(NIGERIA_TZ).strftime("%Y-%m-%d %H:%M:%S %Z")
-        print(f"OUTSIDE_API_WINDOW: Nigeria={local} | allowed=10:00-21:00")
+        print(f"OUTSIDE_API_WINDOW: Nigeria={local} | allowed=10:00-20:00")
         return 0
 
     api_key = os.getenv("TWELVE_DATA_API_KEY")
@@ -83,27 +58,12 @@ def main() -> int:
     equity = _env_float("SIGNAL_EQUITY", 1000.0)
     provider = TwelveDataMarketDataProvider(api_key)
     symbols = _symbols()
-    state = _load_state()
 
     print(f"SCANNING: {', '.join(symbols)}")
-    print("API WINDOW: 10:00-21:00 Africa/Lagos")
-    print(f"M15 HISTORY: {ANALYSIS_BARS} bars")
+    print("API WINDOW: 10:00-20:00 Africa/Lagos | cadence=20 minutes")
     failures = 0
-    skipped = 0
 
     for symbol in symbols:
-        try:
-            latest_bar = _latest_m15_timestamp(provider, symbol)
-        except Exception as exc:
-            failures += 1
-            print(f"ERROR: {symbol}: {exc}")
-            continue
-
-        if state.get(symbol) == latest_bar:
-            skipped += 1
-            print(f"WAIT_M15: {symbol} | bar={latest_bar}")
-            continue
-
         spec = SymbolSpec(
             tick_size=_env_float(f"{symbol}_TICK_SIZE", _env_float("TICK_SIZE", 0.00001)),
             tick_value=_env_float(f"{symbol}_TICK_VALUE", _env_float("TICK_VALUE", 1.0)),
@@ -126,9 +86,6 @@ def main() -> int:
             print(f"ERROR: {symbol}: {exc}")
             continue
 
-        state[symbol] = latest_bar
-        _save_state(state)
-
         if signal is None:
             print(f"NO_TRADE: {symbol}")
             continue
@@ -139,14 +96,11 @@ def main() -> int:
             f"volume={position.volume if position else 'n/a'}"
         )
 
-    # A partial market-data outage must be visible as a failed workflow rather
-    # than a misleading green run. Successful symbols remain processed, while
-    # failed symbols are retried on the next 10-minute poll because their state
-    # is not advanced.
+    # Preserve useful partial analysis while surfacing a complete provider outage.
+    if failures == len(symbols):
+        raise RuntimeError("Scheduled scan failed for every configured symbol")
     if failures:
-        raise RuntimeError(f"Scheduled scan completed with {failures}/{len(symbols)} symbol failure(s)")
-    if skipped == len(symbols):
-        print("NO_NEW_M15_BARS")
+        print(f"PARTIAL_SCAN: {failures}/{len(symbols)} symbol failure(s); successful symbols completed")
     return 0
 
 
