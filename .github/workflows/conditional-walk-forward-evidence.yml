@@ -59,3 +59,5 @@ jobs:
           name: conditional-walk-forward-evidence
           path: conditional_walk_forward_evidence.txt
           if-no-files-found: ignore
+
+# Keep this workflow manually runnable and push-triggerable for evidence refreshes.
