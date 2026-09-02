@@ -2,13 +2,19 @@ name: Walk-forward evidence
 
 on:
   workflow_dispatch:
+  schedule:
+    - cron: "17 1 * * 1-5"
 
 permissions:
-  contents: read
+  contents: write
+
+concurrency:
+  group: walk-forward-evidence
+  cancel-in-progress: false
 
 jobs:
   evidence:
-    name: Current vs adaptive evidence
+    name: Current vs adaptive evidence and profile publication
     runs-on: ubuntu-latest
     timeout-minutes: 20
     env:
@@ -17,6 +23,8 @@ jobs:
     steps:
       - name: Check out repository
         uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
@@ -28,3 +36,15 @@ jobs:
           test -n "$MARKET_DATA_API_KEY" || (echo "TWELVE_DATA_API_KEY secret was not injected" && exit 1)
       - name: Run walk-forward evidence
         run: python scripts/run_walk_forward_evidence.py
+      - name: Publish validated strategy profile
+        run: |
+          test -f strategy_profile.json || (echo "strategy_profile.json was not produced" && exit 1)
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          if git diff --quiet -- strategy_profile.json; then
+            echo "No validated profile changes to publish"
+          else
+            git add strategy_profile.json
+            git commit -m "chore: publish validated strategy profile"
+            git push
+          fi
