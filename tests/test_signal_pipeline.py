@@ -59,15 +59,16 @@ def test_real_analysis_path_reaches_telegram_without_broker_execution():
     assert "EXECUTION: MANUAL — Exness MT5" in message
 
 
-def test_pipeline_does_not_emit_alert_without_explicit_trigger():
+def test_pipeline_uses_mechanical_price_trigger_without_external_confirmation():
     transport = FakeTransport()
     notifier = TelegramNotifier("token", "chat", transport)
     selector = StrategySelector(profile=StrategyProfile({"EURUSD|TREND_UP": "TREND_PULLBACK", "EURUSD|STRONG_TREND_UP": "TREND_PULLBACK"}))
     pipeline = SignalPipeline(FakeProvider(make_bars()), strategy_selector=selector, notifier=notifier)
     signal, position = pipeline.evaluate_and_notify(pair="EURUSD", equity=10_000, symbol_spec=symbol_spec(), trigger_confirmed=False, now=datetime(2026, 8, 10, 8, 0, tzinfo=timezone.utc))
-    assert signal is None
-    assert position is None
-    assert transport.calls == []
+    assert signal is not None
+    assert signal.status.value == "TRIGGERED"
+    assert position is not None
+    assert len(transport.calls) == 1
 
 
 def test_pipeline_suppresses_signals_when_weekly_fx_market_is_closed():
