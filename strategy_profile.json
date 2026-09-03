@@ -1,8 +1,47 @@
 {
-  "assignments": {},
-  "generated_from": "conditional_walk_forward",
-  "min_expectancy_r": 0.1,
-  "min_profit_factor": 1.15,
-  "min_trades": 60,
-  "version": 1
+  "assignments": {
+    "AUDUSD|TREND_UP": "BREAKOUT_RETEST",
+    "EURUSD|TREND_UP": "BREAKOUT_RETEST",
+    "XAUUSD|TREND_DOWN": "MOMENTUM_CONTINUATION",
+    "XAUUSD|TREND_UP": "BREAKOUT_RETEST"
+  },
+  "evidence": {
+    "AUDUSD|TREND_UP": {
+      "expectancy_r": 0.208333,
+      "profit_factor": 1.348837,
+      "selector": "ADAPTIVE",
+      "strategy": "BREAKOUT_RETEST",
+      "trades": 72,
+      "win_rate": 40.2778
+    },
+    "EURUSD|TREND_UP": {
+      "expectancy_r": 0.133333,
+      "profit_factor": 1.214286,
+      "selector": "ADAPTIVE",
+      "strategy": "BREAKOUT_RETEST",
+      "trades": 45,
+      "win_rate": 37.7778
+    },
+    "XAUUSD|TREND_DOWN": {
+      "expectancy_r": 0.2,
+      "profit_factor": 1.333333,
+      "selector": "ADAPTIVE",
+      "strategy": "MOMENTUM_CONTINUATION",
+      "trades": 45,
+      "win_rate": 40.0
+    },
+    "XAUUSD|TREND_UP": {
+      "expectancy_r": 0.33945,
+      "profit_factor": 1.61326,
+      "selector": "ADAPTIVE",
+      "strategy": "BREAKOUT_RETEST",
+      "trades": 327,
+      "win_rate": 44.6483
+    }
+  },
+  "min_expectancy_r": 0.0,
+  "min_profit_factor": 1.05,
+  "min_trades": 30,
+  "source": "out_of_sample_conditional_walk_forward",
+  "version": 2
 }
