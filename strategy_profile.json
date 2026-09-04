@@ -2,17 +2,19 @@
   "assignments": {
     "AUDUSD|TREND_UP": "BREAKOUT_RETEST",
     "EURUSD|TREND_UP": "BREAKOUT_RETEST",
+    "NZDUSD|TREND_UP": "BREAKOUT_RETEST",
+    "USDCAD|TREND_DOWN": "BREAKOUT_RETEST",
     "XAUUSD|TREND_DOWN": "MOMENTUM_CONTINUATION",
     "XAUUSD|TREND_UP": "BREAKOUT_RETEST"
   },
   "evidence": {
     "AUDUSD|TREND_UP": {
-      "expectancy_r": 0.208333,
-      "profit_factor": 1.348837,
+      "expectancy_r": 0.353659,
+      "profit_factor": 1.644444,
       "selector": "ADAPTIVE",
       "strategy": "BREAKOUT_RETEST",
-      "trades": 72,
-      "win_rate": 40.2778
+      "trades": 82,
+      "win_rate": 45.122
     },
     "EURUSD|TREND_UP": {
       "expectancy_r": 0.133333,
@@ -22,21 +24,37 @@
       "trades": 45,
       "win_rate": 37.7778
     },
-    "XAUUSD|TREND_DOWN": {
-      "expectancy_r": 0.2,
-      "profit_factor": 1.333333,
-      "selector": "ADAPTIVE",
-      "strategy": "MOMENTUM_CONTINUATION",
-      "trades": 45,
-      "win_rate": 40.0
-    },
-    "XAUUSD|TREND_UP": {
-      "expectancy_r": 0.33945,
-      "profit_factor": 1.61326,
+    "NZDUSD|TREND_UP": {
+      "expectancy_r": 0.058824,
+      "profit_factor": 1.090909,
       "selector": "ADAPTIVE",
       "strategy": "BREAKOUT_RETEST",
-      "trades": 327,
-      "win_rate": 44.6483
+      "trades": 102,
+      "win_rate": 35.2941
+    },
+    "USDCAD|TREND_DOWN": {
+      "expectancy_r": 0.058824,
+      "profit_factor": 1.090909,
+      "selector": "ADAPTIVE",
+      "strategy": "BREAKOUT_RETEST",
+      "trades": 34,
+      "win_rate": 35.2941
+    },
+    "XAUUSD|TREND_DOWN": {
+      "expectancy_r": 0.214286,
+      "profit_factor": 1.36,
+      "selector": "ADAPTIVE",
+      "strategy": "MOMENTUM_CONTINUATION",
+      "trades": 42,
+      "win_rate": 40.4762
+    },
+    "XAUUSD|TREND_UP": {
+      "expectancy_r": 0.404255,
+      "profit_factor": 1.76,
+      "selector": "ADAPTIVE",
+      "strategy": "BREAKOUT_RETEST",
+      "trades": 329,
+      "win_rate": 46.8085
     }
   },
   "min_expectancy_r": 0.0,
