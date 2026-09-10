@@ -1,60 +1,42 @@
 {
   "assignments": {
     "AUDUSD|TREND_UP": "BREAKOUT_RETEST",
-    "EURUSD|TREND_UP": "BREAKOUT_RETEST",
-    "NZDUSD|TREND_UP": "BREAKOUT_RETEST",
     "USDCAD|TREND_DOWN": "BREAKOUT_RETEST",
     "XAUUSD|TREND_DOWN": "MOMENTUM_CONTINUATION",
     "XAUUSD|TREND_UP": "BREAKOUT_RETEST"
   },
   "evidence": {
     "AUDUSD|TREND_UP": {
-      "expectancy_r": 0.295455,
-      "profit_factor": 1.52,
+      "expectancy_r": 0.125,
+      "profit_factor": 1.2,
       "selector": "ADAPTIVE",
       "strategy": "BREAKOUT_RETEST",
-      "trades": 88,
-      "win_rate": 43.1818
-    },
-    "EURUSD|TREND_UP": {
-      "expectancy_r": 0.2,
-      "profit_factor": 1.333333,
-      "selector": "ADAPTIVE",
-      "strategy": "BREAKOUT_RETEST",
-      "trades": 40,
-      "win_rate": 40.0
-    },
-    "NZDUSD|TREND_UP": {
-      "expectancy_r": 0.08,
-      "profit_factor": 1.125,
-      "selector": "ADAPTIVE",
-      "strategy": "BREAKOUT_RETEST",
-      "trades": 100,
-      "win_rate": 36.0
+      "trades": 80,
+      "win_rate": 37.5
     },
     "USDCAD|TREND_DOWN": {
-      "expectancy_r": 0.166667,
-      "profit_factor": 1.272727,
+      "expectancy_r": 0.114286,
+      "profit_factor": 1.181818,
       "selector": "ADAPTIVE",
       "strategy": "BREAKOUT_RETEST",
-      "trades": 36,
-      "win_rate": 38.8889
+      "trades": 35,
+      "win_rate": 37.1429
     },
     "XAUUSD|TREND_DOWN": {
-      "expectancy_r": 0.421053,
-      "profit_factor": 1.8,
+      "expectancy_r": 0.325581,
+      "profit_factor": 1.583333,
       "selector": "ADAPTIVE",
       "strategy": "MOMENTUM_CONTINUATION",
-      "trades": 38,
-      "win_rate": 47.3684
+      "trades": 43,
+      "win_rate": 44.186
     },
     "XAUUSD|TREND_UP": {
-      "expectancy_r": 0.381232,
-      "profit_factor": 1.706522,
+      "expectancy_r": 0.390029,
+      "profit_factor": 1.726776,
       "selector": "ADAPTIVE",
       "strategy": "BREAKOUT_RETEST",
       "trades": 341,
-      "win_rate": 46.0411
+      "win_rate": 46.3343
     }
   },
   "min_expectancy_r": 0.0,
