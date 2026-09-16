@@ -23,20 +23,20 @@
       "win_rate": 40.625
     },
     "XAUUSD|TREND_DOWN": {
-      "expectancy_r": 0.285714,
-      "profit_factor": 1.5,
+      "expectancy_r": 0.090909,
+      "profit_factor": 1.142857,
       "selector": "ADAPTIVE",
       "strategy": "MOMENTUM_CONTINUATION",
-      "trades": 42,
-      "win_rate": 42.8571
+      "trades": 55,
+      "win_rate": 36.3636
     },
     "XAUUSD|TREND_UP": {
-      "expectancy_r": 0.330435,
-      "profit_factor": 1.59375,
+      "expectancy_r": 0.237389,
+      "profit_factor": 1.40404,
       "selector": "ADAPTIVE",
       "strategy": "BREAKOUT_RETEST",
-      "trades": 345,
-      "win_rate": 44.3478
+      "trades": 337,
+      "win_rate": 41.2463
     }
   },
   "min_expectancy_r": 0.0,
