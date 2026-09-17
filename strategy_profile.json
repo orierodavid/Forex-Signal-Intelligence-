@@ -15,28 +15,28 @@
       "win_rate": 40.3226
     },
     "USDCAD|TREND_DOWN": {
-      "expectancy_r": 0.21875,
-      "profit_factor": 1.368421,
+      "expectancy_r": 0.3,
+      "profit_factor": 1.529412,
       "selector": "ADAPTIVE",
       "strategy": "BREAKOUT_RETEST",
-      "trades": 32,
-      "win_rate": 40.625
+      "trades": 30,
+      "win_rate": 43.3333
     },
     "XAUUSD|TREND_DOWN": {
-      "expectancy_r": 0.090909,
-      "profit_factor": 1.142857,
+      "expectancy_r": 0.354839,
+      "profit_factor": 1.647059,
       "selector": "ADAPTIVE",
       "strategy": "MOMENTUM_CONTINUATION",
-      "trades": 55,
-      "win_rate": 36.3636
+      "trades": 31,
+      "win_rate": 45.1613
     },
     "XAUUSD|TREND_UP": {
-      "expectancy_r": 0.237389,
-      "profit_factor": 1.40404,
+      "expectancy_r": 0.212575,
+      "profit_factor": 1.356784,
       "selector": "ADAPTIVE",
       "strategy": "BREAKOUT_RETEST",
-      "trades": 337,
-      "win_rate": 41.2463
+      "trades": 334,
+      "win_rate": 40.4192
     }
   },
   "min_expectancy_r": 0.0,
