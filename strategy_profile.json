@@ -15,28 +15,28 @@
       "win_rate": 42.1875
     },
     "NZDUSD|TREND_DOWN": {
-      "expectancy_r": 0.033784,
-      "profit_factor": 1.051546,
+      "expectancy_r": 0.094891,
+      "profit_factor": 1.149425,
       "selector": "ADAPTIVE",
       "strategy": "BREAKOUT_RETEST",
-      "trades": 148,
-      "win_rate": 34.4595
+      "trades": 137,
+      "win_rate": 36.4964
     },
     "XAUUSD|TREND_DOWN": {
-      "expectancy_r": 0.2,
-      "profit_factor": 1.333333,
+      "expectancy_r": 0.147059,
+      "profit_factor": 1.238095,
       "selector": "ADAPTIVE",
       "strategy": "MOMENTUM_CONTINUATION",
-      "trades": 35,
-      "win_rate": 40.0
+      "trades": 34,
+      "win_rate": 38.2353
     },
     "XAUUSD|TREND_UP": {
-      "expectancy_r": 0.053435,
-      "profit_factor": 1.082353,
+      "expectancy_r": 0.061538,
+      "profit_factor": 1.095238,
       "selector": "ADAPTIVE",
       "strategy": "BREAKOUT_RETEST",
-      "trades": 262,
-      "win_rate": 35.1145
+      "trades": 260,
+      "win_rate": 35.3846
     }
   },
   "min_expectancy_r": 0.0,
