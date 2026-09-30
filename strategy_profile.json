@@ -2,41 +2,32 @@
   "assignments": {
     "AUDUSD|TREND_UP": "BREAKOUT_RETEST",
     "NZDUSD|TREND_DOWN": "BREAKOUT_RETEST",
-    "XAUUSD|TREND_DOWN": "MOMENTUM_CONTINUATION",
-    "XAUUSD|TREND_UP": "BREAKOUT_RETEST"
+    "XAUUSD|TREND_DOWN": "BREAKOUT_RETEST"
   },
   "evidence": {
     "AUDUSD|TREND_UP": {
-      "expectancy_r": 0.265625,
-      "profit_factor": 1.459459,
+      "expectancy_r": 0.2,
+      "profit_factor": 1.333333,
       "selector": "ADAPTIVE",
       "strategy": "BREAKOUT_RETEST",
-      "trades": 64,
-      "win_rate": 42.1875
+      "trades": 60,
+      "win_rate": 40.0
     },
     "NZDUSD|TREND_DOWN": {
-      "expectancy_r": 0.094891,
-      "profit_factor": 1.149425,
+      "expectancy_r": 0.056338,
+      "profit_factor": 1.086957,
       "selector": "ADAPTIVE",
       "strategy": "BREAKOUT_RETEST",
-      "trades": 137,
-      "win_rate": 36.4964
+      "trades": 142,
+      "win_rate": 35.2113
     },
     "XAUUSD|TREND_DOWN": {
-      "expectancy_r": 0.147059,
-      "profit_factor": 1.238095,
-      "selector": "ADAPTIVE",
-      "strategy": "MOMENTUM_CONTINUATION",
-      "trades": 34,
-      "win_rate": 38.2353
-    },
-    "XAUUSD|TREND_UP": {
-      "expectancy_r": 0.061538,
-      "profit_factor": 1.095238,
+      "expectancy_r": 0.160991,
+      "profit_factor": 1.262626,
       "selector": "ADAPTIVE",
       "strategy": "BREAKOUT_RETEST",
-      "trades": 260,
-      "win_rate": 35.3846
+      "trades": 323,
+      "win_rate": 38.6997
     }
   },
   "min_expectancy_r": 0.0,
