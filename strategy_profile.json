@@ -5,20 +5,20 @@
   },
   "evidence": {
     "AUDUSD|TREND_DOWN": {
-      "expectancy_r": 0.05,
-      "profit_factor": 1.076923,
+      "expectancy_r": 0.043478,
+      "profit_factor": 1.066667,
       "selector": "ADAPTIVE",
       "strategy": "BREAKOUT_RETEST",
-      "trades": 60,
-      "win_rate": 35.0
+      "trades": 69,
+      "win_rate": 34.7826
     },
     "XAUUSD|TREND_DOWN": {
-      "expectancy_r": 0.097561,
-      "profit_factor": 1.153846,
+      "expectancy_r": 0.151786,
+      "profit_factor": 1.246377,
       "selector": "ADAPTIVE",
       "strategy": "BREAKOUT_RETEST",
-      "trades": 328,
-      "win_rate": 36.5854
+      "trades": 336,
+      "win_rate": 38.3929
     }
   },
   "min_expectancy_r": 0.0,
