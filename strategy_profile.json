@@ -1,24 +1,24 @@
 {
   "assignments": {
-    "EURUSD|TREND_UP": "BREAKOUT_RETEST",
+    "AUDUSD|TREND_DOWN": "BREAKOUT_RETEST",
     "XAUUSD|TREND_DOWN": "BREAKOUT_RETEST"
   },
   "evidence": {
-    "EURUSD|TREND_UP": {
-      "expectancy_r": 0.166667,
-      "profit_factor": 1.272727,
+    "AUDUSD|TREND_DOWN": {
+      "expectancy_r": 0.12,
+      "profit_factor": 1.191489,
       "selector": "ADAPTIVE",
       "strategy": "BREAKOUT_RETEST",
-      "trades": 36,
-      "win_rate": 38.8889
+      "trades": 75,
+      "win_rate": 37.3333
     },
     "XAUUSD|TREND_DOWN": {
-      "expectancy_r": 0.039514,
-      "profit_factor": 1.060465,
+      "expectancy_r": 0.057751,
+      "profit_factor": 1.089202,
       "selector": "ADAPTIVE",
       "strategy": "BREAKOUT_RETEST",
       "trades": 329,
-      "win_rate": 34.6505
+      "win_rate": 35.2584
     }
   },
   "min_expectancy_r": 0.0,
