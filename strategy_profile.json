@@ -1,24 +1,33 @@
 {
   "assignments": {
+    "AUDUSD|TREND_DOWN": "BREAKOUT_RETEST",
     "USDCHF|TREND_DOWN": "BREAKOUT_RETEST",
     "XAUUSD|TREND_DOWN": "BREAKOUT_RETEST"
   },
   "evidence": {
-    "USDCHF|TREND_DOWN": {
-      "expectancy_r": 0.156627,
-      "profit_factor": 1.254902,
+    "AUDUSD|TREND_DOWN": {
+      "expectancy_r": 0.16,
+      "profit_factor": 1.26087,
       "selector": "ADAPTIVE",
       "strategy": "BREAKOUT_RETEST",
-      "trades": 83,
-      "win_rate": 38.5542
+      "trades": 75,
+      "win_rate": 38.6667
+    },
+    "USDCHF|TREND_DOWN": {
+      "expectancy_r": 0.103448,
+      "profit_factor": 1.163636,
+      "selector": "ADAPTIVE",
+      "strategy": "BREAKOUT_RETEST",
+      "trades": 87,
+      "win_rate": 36.7816
     },
     "XAUUSD|TREND_DOWN": {
-      "expectancy_r": 0.106707,
-      "profit_factor": 1.169082,
+      "expectancy_r": 0.115854,
+      "profit_factor": 1.184466,
       "selector": "ADAPTIVE",
       "strategy": "BREAKOUT_RETEST",
       "trades": 328,
-      "win_rate": 36.8902
+      "win_rate": 37.1951
     }
   },
   "min_expectancy_r": 0.0,
