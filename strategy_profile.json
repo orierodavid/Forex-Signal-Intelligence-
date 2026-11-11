@@ -1,20 +1,14 @@
 {
   "assignments": {
     "AUDUSD|TREND_DOWN": "BREAKOUT_RETEST",
+    "AUDUSD|TREND_UP": "TREND_PULLBACK",
     "NZDUSD|TREND_DOWN": "BREAKOUT_RETEST",
+    "NZDUSD|TREND_UP": "TREND_PULLBACK",
     "USDCAD|TREND_UP": "TREND_PULLBACK",
     "XAUUSD|TREND_DOWN": "BREAKOUT_RETEST"
   },
   "evidence": {
     "AUDUSD|TREND_DOWN": {
-      "expectancy_r": 0.228916,
-      "profit_factor": 1.387755,
-      "selector": "ADAPTIVE",
-      "strategy": "BREAKOUT_RETEST",
-      "trades": 83,
-      "win_rate": 40.9639
-    },
-    "NZDUSD|TREND_DOWN": {
       "expectancy_r": 0.193878,
       "profit_factor": 1.322034,
       "selector": "ADAPTIVE",
@@ -22,21 +16,45 @@
       "trades": 98,
       "win_rate": 39.7959
     },
-    "USDCAD|TREND_UP": {
-      "expectancy_r": 0.2,
-      "profit_factor": 1.333333,
+    "AUDUSD|TREND_UP": {
+      "expectancy_r": 0.108696,
+      "profit_factor": 1.172414,
       "selector": "ADAPTIVE",
       "strategy": "TREND_PULLBACK",
-      "trades": 45,
-      "win_rate": 40.0
+      "trades": 92,
+      "win_rate": 36.9565
     },
-    "XAUUSD|TREND_DOWN": {
-      "expectancy_r": 0.032787,
-      "profit_factor": 1.05,
+    "NZDUSD|TREND_DOWN": {
+      "expectancy_r": 0.128713,
+      "profit_factor": 1.206349,
       "selector": "ADAPTIVE",
       "strategy": "BREAKOUT_RETEST",
-      "trades": 305,
-      "win_rate": 34.4262
+      "trades": 101,
+      "win_rate": 37.6238
+    },
+    "NZDUSD|TREND_UP": {
+      "expectancy_r": 0.130435,
+      "profit_factor": 1.209302,
+      "selector": "ADAPTIVE",
+      "strategy": "TREND_PULLBACK",
+      "trades": 138,
+      "win_rate": 37.6812
+    },
+    "USDCAD|TREND_UP": {
+      "expectancy_r": 0.08,
+      "profit_factor": 1.125,
+      "selector": "ADAPTIVE",
+      "strategy": "TREND_PULLBACK",
+      "trades": 50,
+      "win_rate": 36.0
+    },
+    "XAUUSD|TREND_DOWN": {
+      "expectancy_r": 0.083333,
+      "profit_factor": 1.130435,
+      "selector": "ADAPTIVE",
+      "strategy": "BREAKOUT_RETEST",
+      "trades": 324,
+      "win_rate": 36.1111
     }
   },
   "min_expectancy_r": 0.0,
