@@ -2,10 +2,9 @@
   "assignments": {
     "AUDUSD|TREND_DOWN": "BREAKOUT_RETEST",
     "AUDUSD|TREND_UP": "TREND_PULLBACK",
+    "EURUSD|RANGE": "MEAN_REVERSION",
     "EURUSD|TREND_DOWN": "BREAKOUT_RETEST",
     "NZDUSD|TREND_DOWN": "BREAKOUT_RETEST",
-    "NZDUSD|TREND_UP": "TREND_PULLBACK",
-    "USDCAD|TREND_DOWN": "BREAKOUT_RETEST",
     "XAUUSD|TREND_DOWN": "BREAKOUT_RETEST"
   },
   "evidence": {
@@ -18,12 +17,20 @@
       "win_rate": 40.9524
     },
     "AUDUSD|TREND_UP": {
-      "expectancy_r": 0.25,
-      "profit_factor": 1.428571,
+      "expectancy_r": 0.074627,
+      "profit_factor": 1.116279,
       "selector": "ADAPTIVE",
       "strategy": "TREND_PULLBACK",
-      "trades": 72,
-      "win_rate": 41.6667
+      "trades": 67,
+      "win_rate": 35.8209
+    },
+    "EURUSD|RANGE": {
+      "expectancy_r": 0.074627,
+      "profit_factor": 1.116279,
+      "selector": "ADAPTIVE",
+      "strategy": "MEAN_REVERSION",
+      "trades": 67,
+      "win_rate": 35.8209
     },
     "EURUSD|TREND_DOWN": {
       "expectancy_r": 0.137931,
@@ -34,36 +41,20 @@
       "win_rate": 37.931
     },
     "NZDUSD|TREND_DOWN": {
-      "expectancy_r": 0.427184,
-      "profit_factor": 1.814815,
+      "expectancy_r": 0.442308,
+      "profit_factor": 1.851852,
       "selector": "ADAPTIVE",
       "strategy": "BREAKOUT_RETEST",
-      "trades": 103,
-      "win_rate": 47.5728
-    },
-    "NZDUSD|TREND_UP": {
-      "expectancy_r": 0.086614,
-      "profit_factor": 1.135802,
-      "selector": "ADAPTIVE",
-      "strategy": "TREND_PULLBACK",
-      "trades": 127,
-      "win_rate": 36.2205
-    },
-    "USDCAD|TREND_DOWN": {
-      "expectancy_r": 0.181818,
-      "profit_factor": 1.3,
-      "selector": "ADAPTIVE",
-      "strategy": "BREAKOUT_RETEST",
-      "trades": 33,
-      "win_rate": 39.3939
+      "trades": 104,
+      "win_rate": 48.0769
     },
     "XAUUSD|TREND_DOWN": {
-      "expectancy_r": 0.365922,
-      "profit_factor": 1.671795,
+      "expectancy_r": 0.354571,
+      "profit_factor": 1.646465,
       "selector": "ADAPTIVE",
       "strategy": "BREAKOUT_RETEST",
-      "trades": 358,
-      "win_rate": 45.5307
+      "trades": 361,
+      "win_rate": 45.1524
     }
   },
   "min_expectancy_r": 0.0,
