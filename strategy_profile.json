@@ -7,7 +7,8 @@
     "USDCAD|TREND_DOWN": "TREND_PULLBACK",
     "USDCAD|TREND_UP": "TREND_PULLBACK",
     "USDCHF|TREND_DOWN": "BREAKOUT_RETEST",
-    "XAUUSD|TREND_DOWN": "BREAKOUT_RETEST"
+    "XAUUSD|TREND_DOWN": "BREAKOUT_RETEST",
+    "XAUUSD|TREND_UP": "MOMENTUM_CONTINUATION"
   },
   "evidence": {
     "AUDUSD|TREND_DOWN": {
@@ -19,12 +20,12 @@
       "win_rate": 38.3459
     },
     "AUDUSD|TREND_UP": {
-      "expectancy_r": 0.033333,
-      "profit_factor": 1.050847,
+      "expectancy_r": 0.094118,
+      "profit_factor": 1.148148,
       "selector": "ADAPTIVE",
       "strategy": "TREND_PULLBACK",
-      "trades": 90,
-      "win_rate": 34.4444
+      "trades": 85,
+      "win_rate": 36.4706
     },
     "EURUSD|TREND_DOWN": {
       "expectancy_r": 0.347826,
@@ -35,20 +36,20 @@
       "win_rate": 44.9275
     },
     "NZDUSD|TREND_DOWN": {
-      "expectancy_r": 0.379562,
-      "profit_factor": 1.702703,
+      "expectancy_r": 0.389706,
+      "profit_factor": 1.726027,
       "selector": "ADAPTIVE",
       "strategy": "BREAKOUT_RETEST",
-      "trades": 137,
-      "win_rate": 45.9854
+      "trades": 136,
+      "win_rate": 46.3235
     },
     "USDCAD|TREND_DOWN": {
-      "expectancy_r": 0.371429,
-      "profit_factor": 1.684211,
+      "expectancy_r": 0.297297,
+      "profit_factor": 1.52381,
       "selector": "ADAPTIVE",
       "strategy": "TREND_PULLBACK",
-      "trades": 35,
-      "win_rate": 45.7143
+      "trades": 37,
+      "win_rate": 43.2432
     },
     "USDCAD|TREND_UP": {
       "expectancy_r": 0.2,
@@ -59,20 +60,28 @@
       "win_rate": 40.0
     },
     "USDCHF|TREND_DOWN": {
-      "expectancy_r": 0.054054,
-      "profit_factor": 1.083333,
+      "expectancy_r": 0.125,
+      "profit_factor": 1.2,
       "selector": "ADAPTIVE",
       "strategy": "BREAKOUT_RETEST",
-      "trades": 111,
-      "win_rate": 35.1351
+      "trades": 104,
+      "win_rate": 37.5
     },
     "XAUUSD|TREND_DOWN": {
-      "expectancy_r": 0.378753,
-      "profit_factor": 1.700855,
+      "expectancy_r": 0.391101,
+      "profit_factor": 1.729258,
       "selector": "ADAPTIVE",
       "strategy": "BREAKOUT_RETEST",
-      "trades": 433,
-      "win_rate": 45.9584
+      "trades": 427,
+      "win_rate": 46.37
+    },
+    "XAUUSD|TREND_UP": {
+      "expectancy_r": 0.39726,
+      "profit_factor": 1.74359,
+      "selector": "ADAPTIVE",
+      "strategy": "MOMENTUM_CONTINUATION",
+      "trades": 73,
+      "win_rate": 46.5753
     }
   },
   "min_expectancy_r": 0.0,
